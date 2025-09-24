@@ -1,0 +1,85 @@
+name: llmchess-reasoningquality-oai-oss-120b-low
+image: lucasdino/llm_chess:latest
+compute:
+  gpus: 8
+  cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess-reasoning-quality
+    entity: lucasdino-ucsd
+env_variables:
+  MODEL_NAME: "openai/gpt-oss-120b"
+  MODEL_VERSION: "oai_oss"
+  EXPERIMENT_NAME: "llmchess-reasoningquality-oai-oss120b-low"
+  RUN_TYPE: "reasoning_quality"
+  DATA_FOLDERS: "llama4-maverick-400 oai-oss120b-low-400 qwen25-7b-400 qwen25-7b-sft-dm22-400 qwen25-7b-sftdm22-drgrpo-dm11-400 qwen25-7b-sft-dm23-400 qwen25-7b-sftdm23-drgrpo-dm10-400 qwen25-7b-sft-dm24-400 qwen25-7b-sftdm24-drgrpo-dm10-400 qwen25-7b-sft-dm25-400 qwen25-7b-sftdm25-drgrpo-dm10-400 qwen25-7b-sft-dm26-400 qwen25-7b-sftdm26-drgrpo-dm10-400 qwen25-7b-sft-dm27-400 qwen25-7b-sftdm27-drgrpo-dm10-400 qwen25-7b-sft-dm28-400 qwen25-7b-sftdm28-drgrpo-dm10-400 qwen25-7b-sftdm28-drgrpo-dm10-take2-400 qwen25-7b-sft-dm29-p4-400 qwen25-7b-sftdm29-p4-drgrpo-dm12-400 qwen25-7b-sftdm29-p4-drgrpo-dm13-400 qwen25-7b-sftdm29-p1-drgrpo-dm13-400 qwen25-7b-sft-dm29-p4-c37-400 qwen25-7b-sftdm29-p4-c37-drgrpo-dm12-400 qwen25-7b-sft-dm30-400 qwen25-7b-sftdm30-drgrpo-dm10-400 qwen25-7b-sft-dm31-400 qwen25-7b-sftdm31-drgrpo-dm10-400 qwen25-7b-sft-dm32-400 qwen25-7b-sftdm32-drgrpo-dm12-400 qwen25-7b-sft-dm33-400 qwen25-7b-sftdm33-drgrpo-dm10-400 qwen25-7b-sft-dm34-400 qwen25-7b-sftdm34-drgrpo-dm10-400 qwen25-7b-sft-dm35-400 qwen25-7b-sftdm35-drgrpo-dm10-400 qwen25-7b-sft-dm36-400 qwen25-7b-sftdm36-drgrpo-dm10-400" 
+command: |-
+  source /opt/conda/etc/profile.d/conda.sh && conda activate llm_chess
+
+  echo Waiting for model server to become available...
+  sleep 30
+
+  until curl http://localhost:8000/v1/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": $MODEL_NAME,
+        "prompt": "San Francisco is a",
+        "max_tokens": 7,
+        "temperature": 0
+    }'> /dev/null; do       echo -n ".";       sleep 10;   done
+
+  echo Pulling latest code...
+  git reset --hard HEAD
+  git pull origin main
+  sleep 15
+
+  echo Service is live. Starting the job...
+
+  python -m llm_chess.tasks.inference \
+    --model $MODEL_NAME \
+    --model_version $MODEL_VERSION \
+    --experiment_name $EXPERIMENT_NAME \
+    --data_dir llm_chess/data/cleaned/model_responses \
+    --data_files $DATA_FOLDERS \
+    --run_type $RUN_TYPE \
+    --batch_size 50 \
+    --max_samples None \
+    --use_wandb \
+    --save_verbose \
+    --max_tokens 11000 \
+    --temperature 0.6 \
+    --top_p 0.95 \
+    --top_k 20 \
+    --min_p 0 \
+    --reasoning_effort low
+
+  echo Finished the job.
+
+dependent_deployment:
+  image: vllm/vllm-openai:latest
+  model: {}
+  command: |-
+    set -x
+    echo Downloading $MODEL_NAME from HuggingFace...
+    pip install uv
+
+    uv venv --python 3.12 --seed
+    source .venv/bin/activate
+    uv pip install --pre vllm==0.10.1+gptoss \
+      --extra-index-url https://wheels.vllm.ai/gpt-oss/ \
+      --extra-index-url https://download.pytorch.org/whl/nightly/cu128 \
+      --index-strategy unsafe-best-match
+
+    vllm serve $MODEL_NAME \
+      --tensor-parallel-size 8 \
+      --trust-remote-code \
+      --max-model-len 12000
+  env_variables:
+    MODEL_NAME: "openai/gpt-oss-120b"

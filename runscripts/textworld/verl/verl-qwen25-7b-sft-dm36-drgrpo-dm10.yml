@@ -1,0 +1,83 @@
+name: verl-qwen25-7b-sft-dm36-drgrpo-dm10
+image: whatcanyousee/verl:ngc-cu124-vllm0.8.5-sglang0.4.6-mcore0.12.0-te2.3
+compute:
+    gpus: 8
+    cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess-verl
+    entity: lucasdino-ucsd
+env_variables:
+  DATA_GEN_FILE: "verl_datagen_datamix_10"
+  S3_URI: "s3://llm-chess/saved_models/sft-model/qwen25_7b_datamix_36/"
+  SH_FILE: "verl-qwen25-7b-sft-dm36-drgrpo-dm10.sh"
+  EXPERIMENT_NAME: "verl-qwen25-7b-sftdm36-drgrpo-dm10"
+command: |-
+  # Ensure latest from repo and set up env
+  cd llm_chess
+  git reset --hard HEAD
+  git clean -fd
+  git pull origin main
+  sleep 20
+  sleep 1
+
+  # Create our dataset + one-off installs
+  pip install chess
+  pip install pandas
+  pip install wandb
+  python -m llm_chess.data.$DATA_GEN_FILE
+
+  # Move our runscripts to a callable location
+  mv runscripts/verl_sh ./llm_chess/
+  chmod +x llm_chess/verl_sh/*.sh
+  cd llm_chess
+
+  # =====================================================================
+  # Need to import verl (hacky way) so that the python -m calls work
+  # =====================================================================
+  # Step 1: Temporarily move your existing setup.py if it exists
+  if [ -f setup.py ]; then
+      mv setup.py setup_temp.py
+  fi
+
+  # Step 2: Clone verl fork and move files
+  git clone --depth 1 https://github.com/lucasdino/verl-chess
+  mv verl-chess/verl ./
+  mv verl-chess/setup.py ./
+  pip install -e .[vllm]
+
+  # Step 3: Revert the setup scripts
+  mv setup.py setup_verl.py
+  if [ -f setup_temp.py ]; then
+      mv setup_temp.py setup.py
+  fi
+
+  echo "veRL is live."
+
+
+  # =====================================================================
+  # Fetch our desired model for RL
+  # =====================================================================
+  pip install --no-cache-dir awscli
+  aws s3 sync $S3_URI models/base_model
+  mkdir models/checkpoints
+
+
+  # =====================================================================
+  # Main veRL loop
+  # =====================================================================
+  verl_sh/$SH_FILE
+
+  # Save the trained model to S3
+  aws s3 cp models/checkpoints s3://llm-chess/saved_models/verl-model/$EXPERIMENT_NAME --recursive \
+  --exclude "*/optim/*"
+
+  echo "Training complete and model saved to S3"
+  sleep 20

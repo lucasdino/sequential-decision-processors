@@ -1,0 +1,82 @@
+name: llmchess-llama4-maverick-generate-synthetic
+image: lucasdino/llm_chess:latest
+compute:
+  gpus: 8
+  cluster: r18z1p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess
+    entity: lucasdino-ucsd
+env_variables:
+  MODEL_NAME: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+  MODEL_VERSION: "llama4"
+  EXPERIMENT_NAME: "llmchess-llama4-maverick-generate-synthetic-v9"
+  DATA_FILES: "reasonablemove_explanations_150.jsonl"
+command: |-
+  source /opt/conda/etc/profile.d/conda.sh && conda activate llm_chess
+
+  echo Waiting for model server to become available...
+  sleep 30
+
+  until curl http://localhost:8000/v1/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": $MODEL_NAME,
+        "prompt": "San Francisco is a",
+        "max_tokens": 7,
+        "temperature": 0
+    }'> /dev/null; do       echo -n ".";       sleep 10;   done
+
+  echo Pulling latest code...
+  git reset --hard HEAD
+  git pull origin main
+  sleep 15
+
+  echo Service is live. Starting the job...
+
+  python -m llm_chess.tasks.inference \
+    --model $MODEL_NAME \
+    --model_version $MODEL_VERSION \
+    --experiment_name $EXPERIMENT_NAME \
+    --data_dir llm_chess/data/cleaned/generate_synthetic \
+    --data_files $DATA_FILES \
+    --run_type generate \
+    --batch_size 50 \
+    --max_samples None \
+    --save_verbose
+
+  echo Finished initial test.
+
+  python -m llm_chess.tasks.inference \
+    --model $MODEL_NAME \
+    --model_version $MODEL_VERSION \
+    --experiment_name $EXPERIMENT_NAME \
+    --data_dir llm_chess/data/cleaned/generate_synthetic \
+    --data_files reasonablemove_explanations_50000.jsonl \
+    --run_type generate \
+    --batch_size 50 \
+    --max_samples None \
+    --save_verbose
+
+  echo Finished the job.
+
+dependent_deployment:
+  image: vllm/vllm-openai:latest
+  model: {}
+  command: |-
+    set -x
+    echo Downloading $MODEL_NAME from HuggingFace...
+
+    vllm serve $MODEL_NAME \
+      --tensor-parallel-size 8 \
+      --trust-remote-code \
+      --max-model-len 4000
+  env_variables:
+    MODEL_NAME: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"

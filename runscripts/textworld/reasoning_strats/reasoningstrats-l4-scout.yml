@@ -1,0 +1,73 @@
+name: llmchess-reasoningstrategies-l4scout
+image: lucasdino/llm_chess:latest
+compute:
+  gpus: 8
+  cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess-reasoningstrats
+    entity: lucasdino-ucsd
+env_variables:
+  MODEL_NAME: "meta-llama/Llama-4-Scout-17B-16E-Instruct"
+  MODEL_VERSION: "llama4"
+  EXPERIMENT_NAME: "llmchess-reasoningstrategies-l4scoutjudge-ablations-8_17_2025"
+  RUN_TYPE: "reasoning_strategy"
+  DATA_FILES: "llmchess-oai-oss120b-medium-400-8.25.2025"
+command: |-
+  source /opt/conda/etc/profile.d/conda.sh && conda activate llm_chess
+
+  echo Waiting for model server to become available...
+  sleep 30
+
+  until curl http://localhost:8000/v1/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": $MODEL_NAME,
+        "prompt": "San Francisco is a",
+        "max_tokens": 7,
+        "temperature": 0
+    }'> /dev/null; do       echo -n ".";       sleep 10;   done
+
+  echo Pulling latest code...
+  git reset --hard HEAD
+  git pull origin main
+  sleep 15
+
+  echo Service is live. Starting the job...
+
+  python -m llm_chess.tasks.inference \
+    --model $MODEL_NAME \
+    --model_version $MODEL_VERSION \
+    --experiment_name $EXPERIMENT_NAME \
+    --data_dir llm_chess/data/cleaned/model_responses \
+    --data_files $DATA_FILES \
+    --run_type $RUN_TYPE \
+    --batch_size 50 \
+    --max_samples None \
+    --use_wandb \
+    --save_verbose \
+    --max_tokens 4000
+
+
+  echo Finished the job.
+
+dependent_deployment:
+  image: vllm/vllm-openai:latest
+  model: {}
+  command: |-
+    set -x
+    echo Downloading $MODEL_NAME from HuggingFace...
+
+    vllm serve $MODEL_NAME \
+      --tensor-parallel-size 8 \
+      --trust-remote-code \
+      --max-model-len 16000
+  env_variables:
+    MODEL_NAME: "meta-llama/Llama-4-Scout-17B-16E-Instruct"

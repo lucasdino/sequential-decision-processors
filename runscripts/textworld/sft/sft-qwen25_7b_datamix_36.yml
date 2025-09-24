@@ -1,0 +1,73 @@
+name: llmchess-qwen25-7b-instruct-sft-dm36
+image: isadoracw/llama-factory-mc:latest
+compute:
+    gpus: 8
+    cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess-sft
+    entity: lucasdino-ucsd
+env_variables:
+  S3_DATASET_PATH:  "s3://llm-chess/train_data/exp_36/"
+  YAML_CONFIG_FILE: "tasks/training_configs/llamafactory_sft_programmatic_qwen25_dm36.yaml"
+  SAVE_FOLDER_NAME: "qwen25_7b_datamix_36"
+command: |-
+  # ------------------------------
+  # Download/install dependencies
+  # ------------------------------
+  cd llm_chess
+  git reset --hard HEAD
+  git clean -fd
+  git pull origin main
+  sleep 20
+  pip install -e .
+  sleep 3
+  apt-get update && apt-get install -y libgl1-mesa-glx
+  pip install opencv-python==4.5.4.60
+  pip uninstall opencv-python -y
+  pip install opencv-python-headless
+  pip install wandb
+
+  # ------------------------------
+  # Generate our dataset
+  # ------------------------------
+  # python -m $DATASET_GEN_FILE
+  aws s3 sync $S3_DATASET_PATH llm_chess/data
+
+  # ------------------------------
+  # Download and install llamafactory
+  # ------------------------------
+  cd llm_chess
+  git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
+  cd LLaMA-Factory
+  pip install -e ".[torch,metrics]"
+  cd ..
+
+  # ------------------------------
+  # Train (using yaml as config)
+  # ------------------------------
+  llamafactory-cli train $YAML_CONFIG_FILE
+
+  # ------------------------------
+  # Save trained model to S3
+  # ------------------------------
+  # Save the trained model to S3
+  aws s3 cp sft-model/ s3://llm-chess/saved_models/sft-model/$SAVE_FOLDER_NAME --recursive \
+  --exclude "*" \
+  --include "model-*.safetensors" \
+  --include "model.safetensors.index.json" \
+  --include "config.json" \
+  --include "tokenizer.json" \
+  --include "tokenizer_config.json" \
+  --include "special_tokens_map.json" \
+  --include "generation_config.json"
+
+  echo "Training complete and model saved to S3"
+  sleep 45

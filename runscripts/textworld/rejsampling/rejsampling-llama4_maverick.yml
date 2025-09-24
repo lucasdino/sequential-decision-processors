@@ -1,0 +1,79 @@
+name: llmchess-llama4-maverick-rejectionsampling
+image: lucasdino/llm_chess:latest
+compute:
+    gpus: 8
+    cluster: r18z1p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: git_repo
+    git_repo: lucasdino/llm_chess
+    git_branch: main
+  - integration_type: wandb
+    project: llm-chess-rejsampling
+    entity: lucasdino-ucsd
+env_variables:
+  MODEL_NAME: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+  MODEL_VERSION: "llama4"
+  EXPERIMENT_NAME: "llmchess-llama4-maverick-legalmoves-5k"
+  DATA_FILES: "legalmoves_rejsampling_5000.jsonl"
+command: |-
+  # Activate the conda env
+  source /opt/conda/etc/profile.d/conda.sh && conda activate llm_chess
+
+  # URL to check
+  URL="http://0.0.0.0:8000/v1/completions"
+
+  # Time to wait between checks (in seconds)
+  WAIT_TIME=10
+
+  echo "Waiting for ${URL} to become available..."
+
+  # Loop until the URL is available
+  sleep 60
+  until curl http://localhost:8000/v1/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": $MODEL_NAME,
+        "prompt": "San Francisco is a",
+        "max_tokens": 7,
+        "temperature": 0
+    }'> /dev/null; do       echo -n ".";       sleep "$WAIT_TIME";   done
+
+  # Pull from git -- make sure we always just use the latest version online
+  sleep 5
+  git reset --hard HEAD
+  git pull origin main
+  sleep 20
+
+  echo "Service is live. Starting the job..."
+
+  # Run out main inference function
+  python -m llm_chess.tasks.inference \
+    --model $MODEL_NAME \
+    --model_version $MODEL_VERSION \
+    --experiment_name $EXPERIMENT_NAME \
+    --data_dir llm_chess/data/cleaned/rej_sampling \
+    --data_files $DATA_FILES \
+    --run_type rejsampling \
+    --batch_size 80 \
+    --max_samples None \
+    --use_wandb
+
+  echo "Finished the job."
+
+dependent_deployment:
+  image: vllm/vllm-openai:latest
+  model: {}
+  command: |-
+    set -x
+    echo Downloading $MODEL_NAME from HuggingFace...
+
+    vllm serve $MODEL_NAME \
+      --tensor-parallel-size 8 \
+      --trust-remote-code \
+      --max-model-len 3000
+  env_variables:
+    MODEL_NAME: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"

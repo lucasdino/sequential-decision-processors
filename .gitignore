@@ -1,0 +1,15 @@
+# local uv dirs to ignore
+.venv/
+llamafactory.egg-info/
+
+# local dirs to ignore
+archive/
+local_helper/
+
+# Jupyter notebook specific files
+.virtual_documents/
+.ipynb_checkpoints/
+__pycache__/
+
+# Because of the Mac
+.DS_Store
