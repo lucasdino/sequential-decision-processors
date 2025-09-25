@@ -22,3 +22,4 @@ We recommend building with [uv](https://github.com/astral-sh/uv) for fast, repro
     ```bash
     uv run python -m ipykernel install --user --name seq-dec-proc --display-name "Python (seq-dec-proc)"
     ```
+    
