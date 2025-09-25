@@ -1,3 +1,6 @@
+# games
+tw_games
+
 # local uv dirs to ignore
 .venv/
 llamafactory.egg-info/
