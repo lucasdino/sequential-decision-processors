@@ -2,6 +2,8 @@
 ---
 ## Environment Setup
 
+Ensure you have Java 1.8+ installed on your machine.
+
 We recommend building with [uv](https://github.com/astral-sh/uv) for fast, reproducible installs.
 
 1. Create a fresh virtual environment:
