@@ -1,11 +1,26 @@
-import re, json, os
+import re, json, os, sys
 import shutil, subprocess
 from typing import Callable, Optional, Tuple, Dict, Any, List
+from contextlib import contextmanager
 
 import textworld.gym
 
 from pathlib import Path
 
+
+# =======================================
+# Helper to limit unwanted print statements
+# =======================================
+@contextmanager
+def silent_io():
+    devnull = open(os.devnull, "w")
+    _out, _err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = sys.stderr = devnull
+        yield
+    finally:
+        sys.stdout, sys.stderr = _out, _err
+        devnull.close()
 
 # =======================================
 # Observation Extraction Helpers
