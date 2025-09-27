@@ -1,2 +1,3 @@
-from .util import clean_obs_cooking, instantiate_textworld_cooking_game, load_textworld_cooking_game
+from .util import Textworld_Sampling_Manager
 from .env_wrappers import Textworld_Cooking_Wrapper_Env
+from .userplay_util import clean_obs_cooking, instantiate_textworld_cooking_game, load_textworld_cooking_game

@@ -1,11 +1,6 @@
-import re, json, os, sys
-import shutil, subprocess
+import os, sys
 from typing import Callable, Optional, Tuple, Dict, Any, List
 from contextlib import contextmanager
-
-import textworld.gym
-
-from pathlib import Path
 
 
 # =======================================
@@ -22,69 +17,26 @@ def silent_io():
         sys.stdout, sys.stderr = _out, _err
         devnull.close()
 
-# =======================================
-# Observation Extraction Helpers
-# =======================================
-def _trim_ascii_cooking(text: str) -> str:
-    """
-    Simple function that trims the Text World ASCII art from the initial observation
-    """
-    m = re.search(r"\${6,}(?![\s\S]*\${6,})([\s\S]*)\Z", text)
-    if not m:
-        return text
-    out = m.group(1)
-    out = re.sub(r"^[ \t\r\n]+", "", out)
-    return out
-
-def clean_obs_cooking(text: str) -> str:
-    """
-    Simple function to clean / trim the observation
-    """
-    text = _trim_ascii_cooking(text)
-    m = re.search(r"^(.*)>(?!.*>)", text, re.DOTALL)
-    if not m:
-        return text.strip()
-    return m.group(1).rstrip(" \t\r\n")
-
 
 # =======================================
-# Game creation helpers
+# Sampling Manager
 # =======================================
-def instantiate_textworld_cooking_game(
-    filename="custom_cooking",
-    folder="tw_games",
-    recipe=5, take=3, go=1,
-    open_=True, cook=True, cut=True, drop=True,
-    split="train", recipe_seed=None, seed=None, fmt="z8",
-):
-    folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
+class Textworld_Sampling_Manager():
+    DEFAULT_SAMPLING_ARGS = {
+        "max_samples": 5,
+        "rollout_length": 5
+    }
+    MAX_ALLOWABLE_OVERLAP = 1
 
-    # nuke existing files with same basename (any extension)
-    for p in list(folder.glob(filename)) + list(folder.glob(filename + ".*")):
-        (p.unlink() if (p.is_file() or p.is_symlink()) else shutil.rmtree(p))
+    def __init__(self, wrapper, sampling_args=DEFAULT_SAMPLING_ARGS):
+        """ Sampling manager that sits around our wrapper and generates samples. """
+        self.wrapper = wrapper
+        self.sampling_args = sampling_args
 
-    out = folder / f"{filename}.{fmt}"
-    cmd = [
-        "tw-make", "tw-cooking",
-        "--recipe", str(recipe), "--take", str(take), "--go", str(go),
-        "--split", split, "--format", fmt, "--output", str(out),
-    ]
-    for flag, ok in [("--open", open_), ("--cook", cook), ("--cut", cut), ("--drop", drop)]:
-        if ok: cmd.append(flag)
-    if recipe_seed is not None: cmd += ["--recipe-seed", str(recipe_seed)]
-    if seed is not None: cmd += ["--seed", str(seed)]
+    
+    def _get_sampling_moves(self) -> None:
+        """ Generates the indices for sampling. """
+        gold_path_length = len(self.wrapper.game_state.full_gold_path)
 
-    subprocess.run(cmd, check=True)
-    return str(out)
-
-def load_textworld_cooking_game(
-    filename="custom_cooking",
-    folder="tw_games",
-    request_infos=None,
-    max_episode_steps=50
-):
-    env_id = textworld.gym.register_game(f"{folder}/{filename}.z8", request_infos=request_infos, max_episode_steps=max_episode_steps)
-    env = textworld.gym.make(env_id)
-    json_info = json.load(open(f"{folder}/{filename}.json"))
-    env_info = {**json_info['metadata'], **{'objective': json_info['objective']}}
-    return env, env_info
+        # Now see how many possible samples we can get with minimal overlap
+        
