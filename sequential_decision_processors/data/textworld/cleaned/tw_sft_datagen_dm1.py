@@ -52,7 +52,7 @@ elif SAMPLING_STRATEGY == "tokens":
     token_counter = TokenizerCounter(TOKENIZER_VERSION)
     final_samples = load_weighted_by_tokens(sources, MAX_TOKENS, token_counter)
 elif SAMPLING_STRATEGY == "get_token_stats":
-    csv_path = os.path.join(OUTPUT_FOLDER, "token_stats.csv")
+    csv_path = os.path.join(OUTPUT_FOLDER, "cleaned/token_stats/token_stats.csv")
     token_counter = TokenizerCounter(TOKENIZER_VERSION)
     write_token_csv_and_stats(sources, token_counter, csv_path)
 else:

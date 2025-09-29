@@ -1,11 +1,14 @@
 # games
 tw_games
 
-# Generated data in raw folder
+# Datasets (too large to upload to git)
 generated_data/
+uploaded_data/
 cleaned_data/
 train_data/
-uploaded_data/
+
+# Various information
+token_stats/
 
 # local uv dirs to ignore
 .venv/
