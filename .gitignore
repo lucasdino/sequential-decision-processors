@@ -1,6 +1,9 @@
 # games
 tw_games
 
+# Generated data in raw folder
+generated_data/
+
 # local uv dirs to ignore
 .venv/
 llamafactory.egg-info/
