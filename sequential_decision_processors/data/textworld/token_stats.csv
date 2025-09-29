@@ -1,0 +1,4 @@
+group,file,tokens
+magpie,magpie_20k.jsonl,9758493
+best_move,cooking_singlemove_150k.jsonl,480019
+best_line,cooking_multimove_60k.jsonl,196193

@@ -3,6 +3,9 @@ tw_games
 
 # Generated data in raw folder
 generated_data/
+cleaned_data/
+train_data/
+uploaded_data/
 
 # local uv dirs to ignore
 .venv/
