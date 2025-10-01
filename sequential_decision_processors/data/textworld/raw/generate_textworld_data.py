@@ -39,7 +39,7 @@ def generate_cooking_data(num_gens=1, max_samples_single=25, max_samples_multi=2
 
 
 def main():
-    generate_scienceworld_data(num_gens=NUM_GENS, max_samples_single=MAX_SAMPLES_SINGLE, max_samples_multi=MAX_SAMPLES_MULTI)
+    # generate_scienceworld_data(num_gens=NUM_GENS, max_samples_single=MAX_SAMPLES_SINGLE, max_samples_multi=MAX_SAMPLES_MULTI)
     generate_cooking_data(num_gens=NUM_GENS, max_samples_single=MAX_SAMPLES_SINGLE, max_samples_multi=MAX_SAMPLES_MULTI)
 
 
