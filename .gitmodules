@@ -1,0 +1,3 @@
+[submodule "verl_agent_sdp"]
+	path = verl_agent_sdp
+	url = https://github.com/lucasdino/verl-agent-sdp.git
