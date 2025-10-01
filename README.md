@@ -22,4 +22,7 @@ We recommend building with [uv](https://github.com/astral-sh/uv) for fast, repro
     ```bash
     uv run python -m ipykernel install --user --name seq-dec-proc --display-name "Python (seq-dec-proc)"
     ```
-    
+
+
+## Dependencies
+This project uses a fork of [verl-agent](https://github.com/langfengQ/verl-agent).

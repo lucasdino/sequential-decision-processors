@@ -11,6 +11,7 @@ from .dataclass import GameState, Scienceworld_Task
 from .util import silent_io
 from .exceptions import NoFurtherGenerations
 
+
 # ######################################################
 # #########     Textworld Cooking Wrapper      #########
 # ######################################################
