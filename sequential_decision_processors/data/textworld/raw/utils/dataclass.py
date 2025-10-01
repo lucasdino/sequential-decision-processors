@@ -42,8 +42,8 @@ class GameState:
 
     def get_intermediate_state(self) -> str:
         command = ("User", self.last_command)
-        environment = ("Environment", self.env_response + f" [Move {self.moves} | Score = {self.cur_score}/{self.max_score}]")
-        return [command, environment]    
+        environment = ("Environment", self.env_response + f" Score: {self.cur_score}/{self.max_score}")
+        return [command, environment]
 
 
 

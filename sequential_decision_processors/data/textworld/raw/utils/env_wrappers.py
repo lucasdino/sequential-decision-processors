@@ -45,7 +45,6 @@ class Textworld_Cooking_Wrapper_Env():
         """
         Wrapper used to get standard input/output for the cooking task.
         """
-        self.game_state = GameState()
     
     # =======================================
     # Env handling
@@ -124,6 +123,8 @@ class Textworld_Cooking_Wrapper_Env():
                 ctx += ("You must open containers / doors first. " if open_ else "You do not need to open containers / doors. ")
                 self.game_state = GameState(generation_args=args_dict, necessary_context=ctx)
                 return
+            else:
+                print(f"Failed on generation: {gen}")
 
             last_err = f"Attempt {attempt}/{max_attempts} failed.\nCMD: {' '.join(cmd)}\nSTDERR:\n{stderr}"
 
@@ -136,9 +137,10 @@ class Textworld_Cooking_Wrapper_Env():
         request_infos=INFO_REQUESTS,
         max_episode_steps=75
     ):
+        self.game_state = GameState()
         self.env_id = textworld.gym.register_game(f"{folder}/{filename}.z8", request_infos=request_infos, max_episode_steps=max_episode_steps)
         self.env = textworld.gym.make(self.env_id)
-        self.game_state.full_gold_path = json.load(open(f"{folder}/{filename}.json"))['metadata']['walkthrough']
+        self.game_state.full_gold_path = self._clean_goldpath(json.load(open(f"{folder}/{filename}.json"))['metadata']['walkthrough'])
         self.reset_env()
 
 
@@ -223,6 +225,15 @@ class Textworld_Cooking_Wrapper_Env():
         return stripped_text
     
 
+    def _clean_goldpath(self, goldpath):
+        new_goldpath = []
+        for g in goldpath:
+            if g.lower() == "inventory":
+                continue
+            new_goldpath.append(g)
+        return new_goldpath
+
+
     def _run_tw_make(self, args: dict):
         out = Path(args["folder"]) / f"{args['filename']}.{args['fmt']}"
         cmd = [
@@ -251,13 +262,13 @@ class Textworld_Cooking_Wrapper_Env():
         go ∈ {1,6,9,12} (uniform); booleans True w.p. p_true.
         """
         recipe = random.randint(2, 5)
-        take   = random.randint(0, recipe)
+        take   = random.randint(1, recipe)
         go     = random.choice([1, 6, 9, 12])
         bern   = lambda: random.random() < p_true
 
         return {
             "recipe": recipe, "take": take, "go": go,
-            "open_": bern(), "cook": bern(), "cut": bern(), "drop": bern(),
+            "open_": bern(), "cook": bern(), "cut": bern(), "drop": not bern(),
         }
     
 
@@ -348,7 +359,7 @@ class Scienceworld_Wrapper_Env():
         self.game_state.last_command = action
 
         if initial_state:
-            self.game_state.objective = env_state['taskDesc']
+            self.game_state.objective = self._clean_objective(env_state['taskDesc'])
             self.game_state.cur_score = 0
             self.game_state.max_score = 100
             self.game_state.game_verbs = self._get_actions()
@@ -356,18 +367,29 @@ class Scienceworld_Wrapper_Env():
             self.game_state.done = False
             self.game_state.necessary_context = f"Game Args - Simplifications: {env_state['simplificationStr']}" if env_state['simplificationStr'] else None
         else:
-            self.game_state.env_response = self._clean_env_response(env_response)
+            self.game_state.env_response = env_response
+
+        # Need to manually extract location due to bug in env
+        location = self._extract_location(env_state['look'])
+        self.game_state.location = location if location else self.game_state.location
 
 
     # =======================================
     # Other Helpers
     # =======================================
-    def _clean_env_response(self, env_response):
-        return env_response
-    
-    
-    def _clean_obs(self, observation):
-        return observation
+    def _clean_objective(self, text: str) -> str:
+        return text[text.find(":")+2:]    
+
+    def _extract_location(self, text: str) -> Optional[str]:
+        """
+        Look for 'This room is called the ____.' and return the extracted name (stripped),
+        or None if not present.
+        """
+        m = re.search(r"\bThis room is called the\s+(.+?)\.", text, flags=re.IGNORECASE | re.DOTALL)
+        if not m:
+            return None
+        name = m.group(1).strip().strip('"\'').capitalize()
+        return name or None
 
 
     def _get_actions(self) -> List[str]:

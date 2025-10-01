@@ -138,44 +138,38 @@ class Textworld_Sampling_Manager():
 
 
     def _get_sample_indices(self, gold_path: List[str], sampling_args) -> deque[int]:
-        """
-        Uniform over all ascending start sets with gap >= d (= L - overlap), O(n) time.
-        """
-        actions_per_rollout = math.ceil(sampling_args.rollout_length / 2)
-        L = int(actions_per_rollout)
-        O = int(sampling_args.max_step_overlap)
-        d = max(1, L - O)
+        # params
+        L = math.ceil(sampling_args.rollout_length / 2)
+        d = max(1, L - int(sampling_args.max_step_overlap))
+        U = len(gold_path)             # latest allowed start
+        if U < 0: return deque()
 
-        max_start = len(gold_path) - L + 1
-        if max_start <= 0:
-            return deque()
+        # random lattice offset to avoid 0-spike
+        o = random.randint(0, min(d - 1, max(0, U)))
+        cap = 1 + (U - o) // d
+        n = min(int(sampling_args.max_samples_per_env), cap)
+        if n <= 0: return deque()
+        if n == 1: return deque([random.randint(o, U)])
 
-        # Max number of starts that fit with gap d (tight pack)
-        capacity = 1 + (max_start - 1) // d
-        n = min(int(sampling_args.max_samples_per_env), capacity)
-        if n <= 0:
-            return deque()
+        # slack after tight pack at o, o+d, ...
+        S = U - (o + d * (n - 1))
+        if S <= 0: return deque([o + i * d for i in range(n)])
 
-        # Slack domain size after removing mandatory gaps
-        S = max_start - d * (n - 1)
-        if S <= 0:
-            # No slack: only one packing (0, d, 2d, ...)
-            xs = [i * d for i in range(n) if i * d < max_start]
-            return deque(xs)
+        # stars-and-bars over (lead, inter..., tail) summing to S
+        cuts = sorted(random.sample(range(1, S + n), n))
+        prev = 0; parts = []
+        for c in cuts + [S + n]:
+            parts.append(c - prev - 1); prev = c
+        lead, inter = parts[0], parts[1:n]
 
-        # ---- Uniform multiset sampling (combinations with replacement) ----
-        # Pick z_1 < ... < z_n from {0, 1, ..., S+n-2}, then set y_i = z_i - i
-        # so 0 <= y_1 <= ... <= y_n < S.
-        z = sorted(random.sample(range(S + n - 1), n))
-        ys = [z_i - i for i, z_i in enumerate(z)]
+        xs, acc = [], o + lead
+        for i in range(n):
+            xi = acc + i * d
+            xs.append(xi)
+            if i < n - 1: acc += inter[i]
 
-        # Map back to original starts with gaps reinstated
-        xs = [y + i * d for i, y in enumerate(ys)]
-
-        # Sanity checks
-        assert all(0 <= x < max_start for x in xs)
-        assert all(xs[i+1] - xs[i] >= d for i in range(len(xs) - 1))
-
+        assert all(0 <= x <= U for x in xs)
+        assert all(xs[i+1] - xs[i] >= d for i in range(n - 1))
         return deque(xs)
     
 
