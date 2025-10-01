@@ -137,7 +137,6 @@ class Textworld_Cooking_Wrapper_Env():
         request_infos=INFO_REQUESTS,
         max_episode_steps=75
     ):
-        self.game_state = GameState()
         self.env_id = textworld.gym.register_game(f"{folder}/{filename}.z8", request_infos=request_infos, max_episode_steps=max_episode_steps)
         self.env = textworld.gym.make(self.env_id)
         self.game_state.full_gold_path = self._clean_goldpath(json.load(open(f"{folder}/{filename}.json"))['metadata']['walkthrough'])
@@ -345,6 +344,7 @@ class Scienceworld_Wrapper_Env():
         self.env.load(
             taskName=task_name, variationIdx=variation, simplificationStr=simplifications, generateGoldPath=True
         )
+        self.game_state.generation_args = {"task_name": task_name, "variation_idx": variation, "simplification_str": simplifications}
         self.reset_env()
 
 
@@ -385,7 +385,7 @@ class Scienceworld_Wrapper_Env():
         Look for 'This room is called the ____.' and return the extracted name (stripped),
         or None if not present.
         """
-        m = re.search(r"\bThis room is called the\s+(.+?)\.", text, flags=re.IGNORECASE | re.DOTALL)
+        m = re.search(r"\bThis\s+(?:room|outside location)\s+is called the\s+([^.]+)\.", text, flags=re.IGNORECASE)
         if not m:
             return None
         name = m.group(1).strip().strip('"\'').capitalize()
