@@ -6,6 +6,7 @@ generated_data/
 uploaded_data/
 cleaned_data/
 train_data/
+sequential_decision_processors/data/alfworld
 
 # Various information
 token_stats/
