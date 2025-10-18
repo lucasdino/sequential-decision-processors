@@ -301,3 +301,6 @@ dependencies = [
     "yarl==1.20.1",
     "zipp==3.23.0",
 ]
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["torch"]
