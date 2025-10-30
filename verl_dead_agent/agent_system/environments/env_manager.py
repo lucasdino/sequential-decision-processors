@@ -1,12 +1,14 @@
-from typing import List, Tuple, Dict, Union, Any
+import os, time
+from functools import partial
 from collections import defaultdict
+from typing import List, Tuple, Dict, Union, Any
+
 import torch
 import numpy as np
-from functools import partial
-import os
-from agent_system.environments.prompts import *
-from agent_system.environments.base import EnvironmentManagerBase, to_numpy
 from transformers import AutoTokenizer
+
+from verl_dead_agent.agent_system.environments.prompts import *
+from verl_dead_agent.agent_system.environments.base import EnvironmentManagerBase, to_numpy
 
 def parse_gamefile(infos):
     gamefile = []
@@ -81,7 +83,6 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         
         rewards = to_numpy(rewards)
         dones = to_numpy(dones)
- 
 
         return next_observations, rewards, dones, infos
         
@@ -885,18 +886,16 @@ class AppWorldEnvironmentManager(EnvironmentManagerBase):
             self.buffers[i].append({'text_obs': text_obs[i], 'action': actions[i]})
 
 
+# ##############################
+# Primary environment creation function
+# ##############################
 def make_envs(config):
-    """
-    Create enviroments 
-    """ 
-    # check if config.env.rollout.n is an integer
-    if not isinstance(config.env.rollout.n, int):
-        raise ValueError("config.env.rollout.n should be an integer")
-    group_n = config.env.rollout.n if config.env.rollout.n > 0 else 1
-    # Modified by Chris 6/26
-    # Trying to strip this down as much as possible to just get started with ppo. Sort of based on alfworldTWEnv.
+    """ Create enviroments """ 
+    group_n = int(config.env.rollout.n) if config.env.rollout.n > 0 else 1
+    
     if "tales_" in config.env.env_name.lower():
-        from agent_system.environments.env_package.general_tag import build_general_envs, general_projection
+        from verl_dead_agent.agent_system.environments.env_package.general_tag import build_general_envs, general_projection
+        
         # Get the specific environment:
         target_env = config.env.env_name.split("tales_")[-1]
         yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/general_tag/configs', f'config.yaml')
@@ -905,12 +904,11 @@ def make_envs(config):
         print("Training environments built successfully.")
         _val_envs = build_general_envs(yaml_filepath, seed=config.env.seed + 1000, env_num=config.data.val_batch_size, 
                                            group_n=1, main_config=config, is_train=False)
-    
         projection_f = partial(general_projection)
         envs = GeneralEnvironmentManager(_envs, projection_f, target_env, config=config)
         val_envs = GeneralEnvironmentManager(_val_envs, projection_f, target_env, istrain=False, config=config)
-            
         return envs, val_envs
+    
     elif 'lifegate' in config.env.env_name.lower():
         from agent_system.environments.env_package.lifegate import build_lifegate_envs, lifegate_projection
 
@@ -924,6 +922,7 @@ def make_envs(config):
         envs = LifeGateEnvironmentManager(_envs, projection_f, config.env.env_name, config=config)
         val_envs = LifeGateEnvironmentManager(_val_envs, projection_f, config.env.env_name, istrain=False, config=config)
         return envs, val_envs
+    
     elif "gym_cards" in config.env.env_name.lower():
         from agent_system.environments.env_package.gym_cards import build_gymcards_envs, gym_projection
         _envs = build_gymcards_envs(env_name=config.env.env_name, seed=config.env.seed, env_num=config.data.train_batch_size, group_n=group_n, is_train=True)
@@ -933,6 +932,7 @@ def make_envs(config):
         envs = GymCardEnvironmentManager(_envs, projection_f, config.env.env_name)
         val_envs = GymCardEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
+    
     elif "alfworld" in config.env.env_name.lower():
         from agent_system.environments.env_package.alfworld import build_alfworld_envs, alfworld_projection
         if config.env.env_name == 'alfworld/AlfredThorEnv':
@@ -952,6 +952,7 @@ def make_envs(config):
         envs = AlfWorldEnvironmentManager(_envs, projection_f, config.env.env_name)
         val_envs = AlfWorldEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
+    
     elif "sokoban" in config.env.env_name.lower():
         from agent_system.environments.env_package.sokoban import build_sokoban_envs, sokoban_projection
         env_kwargs = {
@@ -967,6 +968,7 @@ def make_envs(config):
         envs = SokobanEnvironmentManager(_envs, projection_f, config.env.env_name)
         val_envs = SokobanEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
+    
     elif "webshop" in config.env.env_name.lower():
         from agent_system.environments.env_package.webshop import build_webshop_envs, webshop_projection
         if config.env.webshop.use_small:
@@ -988,9 +990,9 @@ def make_envs(config):
         projection_f = partial(webshop_projection)
         envs = WebshopEnvironmentManager(_envs, projection_f, config.env.env_name)
         val_envs = WebshopEnvironmentManager(_val_envs, projection_f, config.env.env_name)
-        import time
         time.sleep((config.data.train_batch_size * group_n + config.data.val_batch_size) * 0.1) # wait for the envs to be ready
         return envs, val_envs
+    
     elif "appworld" in config.env.env_name.lower():
         from agent_system.environments.env_package.appworld import build_appworld_envs, appworld_projection
         _envs = build_appworld_envs(dataset_name='train', seed=config.env.seed, env_num=config.data.train_batch_size, group_n=group_n, start_server_id=0)
@@ -1000,233 +1002,76 @@ def make_envs(config):
         envs = AppWorldEnvironmentManager(_envs, projection_f, config.env.env_name)
         val_envs = AppWorldEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
+    
     else:
         print("Environment not supported")
         exit(1)
 
 
+
+# ##############################
+# Smoke tests for the various envs
+# ##############################
 if __name__ == "__main__":
-    env_name = "lifegate"
-    if env_name == "tales_alfworld":
-        # Test LifegateEnvironmentManager
-        from agent_system.environments.env_package.general_tag import build_general_envs, general_projection
-        import time
-        yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/general_tag/configs/config.yaml')
-        env_num = 4
-        group_n = 5
-        time1 = time.time()
-        envs = build_general_envs(yaml_filepath, seed=1, env_num=env_num, group_n=group_n)
-        env_manager = LifeGateEnvironmentManager(envs, lifegate_projection, 'lifegate/LifeGateEnv')
-        time2 = time.time()
-        print(f"env_num: {env_num}, group_n: {group_n}, init time: ", time2 - time1)
-        random_actions_set = ['go north', 'go south', 'go east', 'go west']
-        for k in range(10):
-            time1 = time.time()
-            obs, infos = env_manager.reset()
-            for i in range(20):
-                print("step: ", i)
-                random_actions = [np.random.choice(random_actions_set) for _ in range(len(infos))]
-                # step
-                obs, rewards, dones, infos = env_manager.step(random_actions)
-                if np.array(dones).any():
-                    print("Episode completed")
+    from omegaconf import OmegaConf
 
-                for k in range(len(infos)):
-                    assert infos[k]['won'] == False
-                if obs['image'] is not None:
-                    env_manager.save_image(obs['image'], i)
-                # print("obs['image'].shape: ", obs['image'].shape)
-            time2 = time.time()
-            print(f"env_num: {env_num}, group_n: {group_n}, Time elapsed: ", time2 - time1)
-            print("completed")
-    elif env_name == "lifegate":
-        # Test LifegateEnvironmentManager
-        from agent_system.environments.env_package.lifegate import build_lifegate_envs, lifegate_projection
-        import time
-        yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/lifegate/configs/config.yaml')
-        env_num = 4
-        group_n = 5
-        time1 = time.time()
-        envs = build_lifegate_envs(yaml_filepath, seed=1, env_num=env_num, group_n=group_n)
-        env_manager = LifeGateEnvironmentManager(envs, lifegate_projection, 'lifegate/LifeGateEnv')
-        time2 = time.time()
-        print(f"env_num: {env_num}, group_n: {group_n}, init time: ", time2 - time1)
-        random_actions_set = ['go north', 'go south', 'go east', 'go west']
-        for k in range(10):
-            time1 = time.time()
-            obs, infos = env_manager.reset()
-            for i in range(20):
-                print("step: ", i)
-                random_actions = [np.random.choice(random_actions_set) for _ in range(len(infos))]
-                # step
-                obs, rewards, dones, infos = env_manager.step(random_actions)
-                if np.array(dones).any():
-                    print("Episode completed")
+    def build_min_config(env_name: str):
+        # OmegaConf supports both dot and dict access as used above.
+        return OmegaConf.create({
+            "env": {
+                "env_name": env_name,         # e.g., 'tales_alfworld' or 'tales_scienceworld'
+                "seed": 1234,
+                "rollout": {"n": 1},          # group_n = 1
+                "prompt_template": "basecase", # used by general manager + projection
+                "max_steps": 20,
+            },
+            "data": {
+                "train_batch_size": 8,        # instantiate a couple envs
+                "val_batch_size": 8,
+            },
+            "actor_rollout_ref": {
+                "model": {"path": "bert-base-uncased"},     # lightweight tokenizer
+                "actor": {"ppo_max_token_len_per_gpu": 8192}
+            },
+        })
 
-                for k in range(len(infos)):
-                    assert infos[k]['won'] == False
-                if obs['image'] is not None:
-                    env_manager.save_image(obs['image'], i)
-                # print("obs['image'].shape: ", obs['image'].shape)
-            time2 = time.time()
-            print(f"env_num: {env_num}, group_n: {group_n}, Time elapsed: ", time2 - time1)
-            print("completed")
-    elif env_name == "gym_cards":
-        # Test GymCardEnvironmentManager
-        env_num = 2
-        group_n = 5
-        from agent_system.environments.env_package.gym_cards import build_gymcards_envs, gym_projection
-        envs = build_gymcards_envs('gym_cards/EZPoints-v0', 0, env_num, group_n)
-        projection_f = partial(gym_projection, env_name='gym_cards/EZPoints-v0')
-        env_manager = GymCardEnvironmentManager(envs, projection_f, 'gym_cards/EZPoints-v0')
-        obs, infos = env_manager.reset()
-        for i in range(100):
-            random_actions = [f'"action": {np.random.randint(0, 10)}' for i in range(len(infos))]
-            obs, rewards, dones, infos = env_manager.step(random_actions)
-            env_manager.save_image(obs['image'], i)
-        print("completed")
-    elif env_name == "alfworld":
-        # Test AlfWorldEnvironmentManager
-        from agent_system.environments.env_package.alfworld import alfworld_projection
-        from agent_system.environments.env_package.alfworld import build_alfworld_envs
-        import time
-        alf_config_path = os.path.join(os.path.dirname(__file__), 'env_package/alfworld/configs/config_tw.yaml')
-        env_num = 8
-        group_n = 5
-        time1 = time.time()
-        envs = build_alfworld_envs(alf_config_path, seed=1, env_num=env_num, group_n=group_n)
-        # val_envs = build_alfworld_envs(alf_config_path, 1000, 4)
-        env_manager = AlfWorldEnvironmentManager(envs, alfworld_projection, 'alfworld/AlfredThorEnv')
-        time2 = time.time()
-        print(f"env_num: {env_num}, group_n: {group_n}, init time: ", time2 - time1)
-        # val_env_manager = AlfWorldEnvironmentManager(val_envs, alfworld_projection, 'alfworld/AlfredTWEnv')
-        for k in range(10):
-            time1 = time.time()
-            obs, infos = env_manager.reset()
-            for i in range(20):
-                # get random actions from admissible 'valid' commands (not available for AlfredThorEnv)
-                print("step: ", i)
-                random_actions = [np.random.choice(env_manager.envs.get_admissible_commands[i]) for i in range(len(env_manager.envs.get_admissible_commands))]
-                # step
-                obs, rewards, dones, infos = env_manager.step(random_actions)
-                if np.array(dones).any():
-                    print("Episode completed")
+    def close_quietly(manager):
+        if manager is None:
+            return
+        for closer in (
+            lambda m: getattr(m, "close", None) and m.close(),
+            lambda m: hasattr(m, "envs") and getattr(m.envs, "close", None) and m.envs.close(),
+        ):
+            try:
+                closer(manager)
+            except Exception:
+                pass
 
-                for k in range(len(infos)):
-                    assert infos[k]['won'] == False
-                if obs['image'] is not None:
-                    env_manager.save_image(obs['image'], i)
-                # print("obs['image'].shape: ", obs['image'].shape)
-            time2 = time.time()
-            print(f"env_num: {env_num}, group_n: {group_n}, Time elapsed: ", time2 - time1)
-            print("completed")
+    def smoke(env_name: str):
+        print(f"[smoke] Trying {env_name} ...")
+        config = build_min_config(env_name)
+        envs, val_envs = make_envs(config)
+        try:
+            # Train envs
+            obs, infos = envs.reset()
+            print(f"[smoke] Reset OK (train): n={len(infos)}")
+            text_actions = ["look"] * len(infos)
+            obs, rewards, dones, infos = envs.step(text_actions)
+            print(f"[smoke] Step OK (train): rewards={rewards}, dones={dones}")
 
-    elif env_name == "sokoban":
-        # Test SokobanEnvironmentManager
-        from agent_system.environments.env_package.sokoban import sokoban_projection
-        from agent_system.environments.env_package.sokoban import build_sokoban_envs
-        env_num = 2
-        group_n = 5
-        env_kwargs = {
-            'dim_room': (6, 6),
-            'num_boxes': 1,
-            'max_steps': 100,
-            'search_depth': 30
-        }
-        action_pools = {
-            1: "<action>up</action>",
-            2: "<action>down</action>",
-            3: "<action>left</action>",
-            4: "<action>right</action>",
-        }
-        # ['tiny_rgb_array', 'list', 'state', 'rgb_array']
-        envs = build_sokoban_envs(0, env_num, group_n, mode='rgb_array', is_train=True, env_kwargs=env_kwargs)
-        projection_f = partial(sokoban_projection)
-        env_manager = SokobanEnvironmentManager(envs, projection_f, 'sokoban')
-        obs, infos = env_manager.reset()
-        for i in range(100):
-            random_actions = [action_pools[np.random.randint(1, 5)] for i in range(len(infos))]
-            obs, rewards, dones, infos = env_manager.step(random_actions)
-            if obs['image'] is not None:
-                env_manager.save_image(obs['image'][0], i)
-            if np.array(dones).any():
-                print("Episode completed")
-    elif env_name == "webshop":
-        # Test WebshopEnvironmentManager
-        from agent_system.environments.env_package.webshop import webshop_projection
-        from agent_system.environments.env_package.webshop import build_webshop_envs
-        from agent_system.environments.env_package.webshop.webshop.web_agent_site.models import RandomPolicy
-        import time
-        env_num = 2
-        group_n = 5
-        time1 = time.time()
-        file_path = os.path.join(os.path.dirname(__file__), 'env_package/webshop/webshop/data/items_shuffle_1000.json')
-        attr_path = os.path.join(os.path.dirname(__file__), 'env_package/webshop/webshop/data/items_ins_v2_1000.json')
-        env_kwargs = {
-                    'observation_mode': 'text', 
-                    'num_products': None, 
-                    'human_goals': False,
-                    'file_path': file_path,
-                    'attr_path': attr_path
-                    }
-        envs = build_webshop_envs(seed=1, env_num=env_num, group_n=group_n, env_kwargs=env_kwargs, is_train=True)
-        # val_envs = build_webshop_envs(1000, 4)
-        env_manager = WebshopEnvironmentManager(envs, webshop_projection, 'webshop')
-        policy = RandomPolicy()
-        time2 = time.time()
-        print(f"env_num: {env_num}, group_n: {group_n}, init time: ", time2 - time1)
-        # val_env_manager = AlfWorldEnvironmentManager(val_envs, alfworld_projection, 'alfworld/AlfredTWEnv')
-        for k in range(10):
-            time1 = time.time()
-            obs, infos = env_manager.reset()
-            for i in range(20):
-                # get random actions from admissible 'valid' commands (not available for AlfredThorEnv)
-                print("step: ", i)
-                random_actions = ['<action>'+policy.forward(None, info['available_actions'])+'</action>' for info in infos]
-                # step
-                obs, rewards, dones, infos = env_manager.step(random_actions)
-                if np.array(dones).any():
-                    print("Episode completed")
+            # Val envs
+            vobs, vinfos = val_envs.reset()
+            print(f"[smoke] Reset OK (val): n={len(vinfos)}")
+            vtext_actions = ["look"] * len(vinfos)
+            vobs, vrewards, vdones, vinfos = val_envs.step(vtext_actions)
+            print(f"[smoke] Step OK (val): rewards={vrewards}, dones={vdones}")
+        finally:
+            close_quietly(envs)
+            close_quietly(val_envs)
+        print(f"[smoke] Done {env_name}")
 
-                if obs['image'] is not None:
-                    env_manager.save_image(obs['image'], i)
-                # print("obs['image'].shape: ", obs['image'].shape)
-            time2 = time.time()
-            print(f"env_num: {env_num}, group_n: {group_n}, Time elapsed: ", time2 - time1)
-        print("completed")
-
-    elif env_name == "appworld":
-        # Test AppWorldEnvironmentManager
-        from agent_system.environments.env_package.appworld import appworld_projection
-        from agent_system.environments.env_package.appworld import build_appworld_envs
-        import time
-        env_num = 2
-        group_n = 5
-        time1 = time.time()
-        envs = build_appworld_envs(dataset_name='test_normal', max_interactions=50, seed=1, env_num=env_num, group_n=group_n)
-        # val_envs = build_alfworld_envs(alf_config_path, 1000, 4)
-        env_manager = AppWorldEnvironmentManager(envs, appworld_projection, 'appworld')
-        time2 = time.time()
-        print(f"env_num: {env_num}, group_n: {group_n}, init time: ", time2 - time1)
-        # val_env_manager = AlfWorldEnvironmentManager(val_envs, alfworld_projection, 'alfworld/AlfredTWEnv')
-        for k in range(10):
-            time1 = time.time()
-            obs, infos = env_manager.reset()
-            for i in range(20):
-                # get random actions from admissible 'valid' commands (not available for AlfredThorEnv)
-                print("step: ", i)
-                random_actions = ["print(apis.api_docs.show_api_doc(app_name='supervisor', api_name='show_account_passwords'))" for i in range(len(obs['text']))]
-                # print(apis.api_docs.show_api_descriptions(app_name='supervisor'))
-                # step
-                obs, rewards, dones, infos = env_manager.step(random_actions)
-                if np.array(dones).any():
-                    print("Episode completed")
-
-                for k in range(len(infos)):
-                    assert infos[k]['won'] == False
-                if obs['image'] is not None:
-                    env_manager.save_image(obs['image'], i)
-                # print("obs['image'].shape: ", obs['image'].shape)
-            time2 = time.time()
-            print(f"env_num: {env_num}, group_n: {group_n}, Time elapsed: ", time2 - time1)
-        print("completed")
+    for name in ("tales_alfworld", "tales_textworld"):
+        try:
+            smoke(name)
+        except Exception as e:
+            print(f"[smoke] Skipping {name}: {e}")

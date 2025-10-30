@@ -1,16 +1,14 @@
-HYDRA_FULL_ERROR=1
-
+export HYDRA_FULL_ERROR=1
 export RAY_DISABLE_DASHBOARD=1
 export CUDA_VISIBLE_DEVICES=0
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
-export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_ATTENTION_BACKEND=FLASH_ATTENTION_2
+# export VLLM_ATTENTION_BACKEND=XFORMERS
 
 set -x
 ENGINE=${1:-vllm}
-# export VLLM_ATTENTION_BACKEND=XFORMERS
 ROOT_DIR="$HOME/Desktop/UCSD/Research"
 PROJ_DIR="$ROOT_DIR/sequential-decision-processors"
-
 
 num_cpus_per_env_worker=0.1 # The CPU resource allocated for each environment worker. If you want to use less CPU resources, you can decrease this value.
 val_data_size=32

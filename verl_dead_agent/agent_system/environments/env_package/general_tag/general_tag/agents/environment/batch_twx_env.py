@@ -17,6 +17,7 @@ class TextWorldExpressEnv(gym.Env):
         self.split = split
         self.seeds = get_seeds_twx(split=split, env=self.env)
         self.seed = self.seeds[0]
+        print(f"Self.Seed: {self.seed}")
 
     def reset(self, *, seed=None, options=None):
         if seed is not None:

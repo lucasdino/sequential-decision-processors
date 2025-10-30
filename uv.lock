@@ -984,16 +984,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/70/584c4d7cad80f5e833715c0a29962d7c93b4d18eed522a02981a6d1b6ee5/fastapi-0.119.0-py3-none-any.whl", hash = "sha256:90a2e49ed19515320abb864df570dd766be0662c5d577688f1600170f7f73cf2", size = 107095, upload-time = "2025-10-11T17:13:39.048Z" },
 ]
 
-[package.optional-dependencies]
-standard = [
-    { name = "email-validator" },
-    { name = "fastapi-cli", extra = ["standard"] },
-    { name = "httpx" },
-    { name = "jinja2" },
-    { name = "python-multipart" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
 [[package]]
 name = "fastapi-cli"
 version = "0.0.13"
@@ -1006,12 +996,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/32/4e/3f61850012473b097fc5297d681bd85788e186fadb8555b67baf4c7707f4/fastapi_cli-0.0.13.tar.gz", hash = "sha256:312addf3f57ba7139457cf0d345c03e2170cc5a034057488259c33cd7e494529", size = 17780, upload-time = "2025-09-20T16:37:31.089Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/08/36/7432750f3638324b055496d2c952000bea824259fca70df5577a6a3c172f/fastapi_cli-0.0.13-py3-none-any.whl", hash = "sha256:219b73ccfde7622559cef1d43197da928516acb4f21f2ec69128c4b90057baba", size = 11142, upload-time = "2025-09-20T16:37:29.695Z" },
-]
-
-[package.optional-dependencies]
-standard = [
-    { name = "fastapi-cloud-cli" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [[package]]
@@ -1069,16 +1053,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/40/bb/0ab3e58d22305b6f5
 wheels = [
     { url = "https://files.pythonhosted.org/packages/42/14/42b2651a2f46b022ccd948bca9f2d5af0fd8929c4eec235b8d6d844fbe67/filelock-3.19.1-py3-none-any.whl", hash = "sha256:d38e30481def20772f5baf097c122c3babc4fcdb7e14e57049eb9d88c6dc017d", size = 15988, upload-time = "2025-08-14T16:56:01.633Z" },
 ]
-
-[[package]]
-name = "flash-attn"
-version = "2.7.4.post1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "einops" },
-    { name = "torch" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/11/34/9bf60e736ed7bbe15055ac2dab48ec67d9dbd088d2b4ae318fd77190ab4e/flash_attn-2.7.4.post1.tar.gz", hash = "sha256:f03485c9a49a4d68d0733acdcad80ab0e72afa025a777fdc2966ceccf9d51765", size = 5986610, upload-time = "2025-01-30T06:39:51.93Z" }
 
 [[package]]
 name = "fonttools"
@@ -1479,11 +1453,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f6/42/0e7be334a6851cd7d51cc11717cb95e89333ebf0064431c0255c56957526/huggingface_hub-0.35.1.tar.gz", hash = "sha256:3585b88c5169c64b7e4214d0e88163d4a709de6d1a502e0cd0459e9ee2c9c572", size = 461374, upload-time = "2025-09-23T13:43:47.074Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/60/4acf0c8a3925d9ff491dc08fe84d37e09cfca9c3b885e0db3d4dedb98cea/huggingface_hub-0.35.1-py3-none-any.whl", hash = "sha256:2f0e2709c711e3040e31d3e0418341f7092910f1462dd00350c4e97af47280a8", size = 563340, upload-time = "2025-09-23T13:43:45.343Z" },
-]
-
-[package.optional-dependencies]
-hf-xet = [
-    { name = "hf-xet" },
 ]
 
 [[package]]
@@ -2246,11 +2215,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ce/ff/1992a00ccc936f2c6e69ecb1f2cac678e0fd46c53c71bdab99eda4f89dfd/mistral_common-1.8.5.tar.gz", hash = "sha256:9f6204ede9c807f09040a208a9381ae78ef93e2e5a9cd5202dc12e712a025de8", size = 6331923, upload-time = "2025-09-12T06:43:01.937Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/91/4a/54e19c5e75939fd9418c7b806c21d12cf252ea2ba38f122b597272b459dd/mistral_common-1.8.5-py3-none-any.whl", hash = "sha256:f3cf87b61958a00485e603f3fe0530eb509d7e9b2f7178329dcd260e307eced1", size = 6515140, upload-time = "2025-09-12T06:42:59.622Z" },
-]
-
-[package.optional-dependencies]
-opencv = [
-    { name = "opencv-python-headless" },
 ]
 
 [[package]]
@@ -3891,11 +3855,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/ee/3a6658967bb7d6878f27458247f1f94b67a573afe74b95f3b97c8a71cf29/ray-2.50.0-cp313-cp313-manylinux2014_x86_64.whl", hash = "sha256:838d2ca6065c1255b6c70f1d2041ca0b6ab3abab9083303b65d7b3138c022de2", size = 71038372, upload-time = "2025-10-10T21:56:47.044Z" },
 ]
 
-[package.optional-dependencies]
-cgraph = [
-    { name = "cupy-cuda12x", marker = "sys_platform != 'darwin'" },
-]
-
 [[package]]
 name = "referencing"
 version = "0.36.2"
@@ -4443,7 +4402,6 @@ dependencies = [
     { name = "fastjsonschema" },
     { name = "fastrlock" },
     { name = "filelock" },
-    { name = "flash-attn" },
     { name = "fonttools" },
     { name = "fqdn" },
     { name = "frozenlist" },
@@ -4635,6 +4593,7 @@ dependencies = [
     { name = "termcolor" },
     { name = "terminado" },
     { name = "textworld" },
+    { name = "textworld-express" },
     { name = "thinc" },
     { name = "tiktoken" },
     { name = "tinycss2" },
@@ -4657,7 +4616,6 @@ dependencies = [
     { name = "uvicorn" },
     { name = "uvloop" },
     { name = "virtualenv" },
-    { name = "vllm" },
     { name = "wandb" },
     { name = "wasabi" },
     { name = "watchfiles" },
@@ -4669,7 +4627,6 @@ dependencies = [
     { name = "websockets" },
     { name = "wheel" },
     { name = "wrapt" },
-    { name = "xformers" },
     { name = "xgrammar" },
     { name = "xxhash" },
     { name = "yarl" },
@@ -4742,7 +4699,6 @@ requires-dist = [
     { name = "fastjsonschema", specifier = "==2.21.2" },
     { name = "fastrlock", specifier = "==0.8.3" },
     { name = "filelock", specifier = "==3.19.1" },
-    { name = "flash-attn", specifier = "==2.7.4.post1" },
     { name = "fonttools", specifier = "==4.60.1" },
     { name = "fqdn", specifier = "==1.5.1" },
     { name = "frozenlist", specifier = "==1.7.0" },
@@ -4934,6 +4890,7 @@ requires-dist = [
     { name = "termcolor", specifier = "==3.1.0" },
     { name = "terminado", specifier = "==0.18.1" },
     { name = "textworld", specifier = "==1.6.2" },
+    { name = "textworld-express", specifier = ">=1.1.0" },
     { name = "thinc", specifier = "==8.3.6" },
     { name = "tiktoken", specifier = "==0.12.0" },
     { name = "tinycss2", specifier = "==1.4.0" },
@@ -4956,7 +4913,6 @@ requires-dist = [
     { name = "uvicorn", specifier = "==0.37.0" },
     { name = "uvloop", specifier = "==0.22.1" },
     { name = "virtualenv", specifier = "==20.35.3" },
-    { name = "vllm", specifier = "==0.8.5" },
     { name = "wandb", specifier = "==0.22.0" },
     { name = "wasabi", specifier = "==1.1.3" },
     { name = "watchfiles", specifier = "==1.1.1" },
@@ -4968,7 +4924,6 @@ requires-dist = [
     { name = "websockets", specifier = "==15.0.1" },
     { name = "wheel", specifier = "==0.45.1" },
     { name = "wrapt", specifier = "==1.17.3" },
-    { name = "xformers", specifier = "==0.0.29.post2" },
     { name = "xgrammar", specifier = "==0.1.18" },
     { name = "xxhash", specifier = "==3.5.0" },
     { name = "yarl", specifier = "==1.20.1" },
@@ -5257,6 +5212,20 @@ wheels = [
 [package.optional-dependencies]
 pddl = [
     { name = "fast-downward-textworld" },
+]
+
+[[package]]
+name = "textworld-express"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "orjson" },
+    { name = "prompt-toolkit" },
+    { name = "py4j" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c5/6f/0bd601db7260f954db2da68d3483fd6b8ef540f56bdc18036c16528dbb60/textworld_express-1.1.0.tar.gz", hash = "sha256:4cdea147734489dd294b8bf08379afb81102f9298409ff3204b98c01e76f24ec", size = 1604354, upload-time = "2025-08-25T18:44:35.806Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b0/b4/eed4c5f072d0cc60036a8b127eb04135e46df1da0abec0e7dc0be077d87f/textworld_express-1.1.0-py3-none-any.whl", hash = "sha256:52a03527b8ac17f0ca007728a4e5c2f4462d58249d31b20b0899e27c19b2c28e", size = 1593393, upload-time = "2025-08-25T18:44:34.181Z" },
 ]
 
 [[package]]
@@ -5683,72 +5652,6 @@ wheels = [
 ]
 
 [[package]]
-name = "vllm"
-version = "0.8.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "blake3" },
-    { name = "cachetools" },
-    { name = "cloudpickle" },
-    { name = "compressed-tensors" },
-    { name = "depyf" },
-    { name = "einops" },
-    { name = "fastapi", extra = ["standard"] },
-    { name = "filelock" },
-    { name = "gguf" },
-    { name = "huggingface-hub", extra = ["hf-xet"] },
-    { name = "importlib-metadata" },
-    { name = "lark" },
-    { name = "llguidance", marker = "platform_machine == 'aarch64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
-    { name = "lm-format-enforcer" },
-    { name = "mistral-common", extra = ["opencv"] },
-    { name = "msgspec" },
-    { name = "ninja" },
-    { name = "numba" },
-    { name = "numpy" },
-    { name = "openai" },
-    { name = "opencv-python-headless" },
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-exporter-otlp" },
-    { name = "opentelemetry-sdk" },
-    { name = "opentelemetry-semantic-conventions-ai" },
-    { name = "outlines" },
-    { name = "partial-json-parser" },
-    { name = "pillow" },
-    { name = "prometheus-client" },
-    { name = "prometheus-fastapi-instrumentator" },
-    { name = "protobuf" },
-    { name = "psutil" },
-    { name = "py-cpuinfo" },
-    { name = "pydantic" },
-    { name = "python-json-logger" },
-    { name = "pyyaml" },
-    { name = "pyzmq" },
-    { name = "ray", extra = ["cgraph"] },
-    { name = "requests" },
-    { name = "scipy" },
-    { name = "sentencepiece" },
-    { name = "setuptools" },
-    { name = "six" },
-    { name = "tiktoken" },
-    { name = "tokenizers" },
-    { name = "torch" },
-    { name = "torchaudio" },
-    { name = "torchvision" },
-    { name = "tqdm" },
-    { name = "transformers" },
-    { name = "typing-extensions" },
-    { name = "watchfiles" },
-    { name = "xformers", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "xgrammar", marker = "platform_machine == 'aarch64' or platform_machine == 'x86_64'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/37/7846c244e6637c15f6d5ed6d3f572eedd02ed8ab80aec8c3eb228f35b23c/vllm-0.8.5.tar.gz", hash = "sha256:c7e04d1046304397b4580334038b558fe491af155fdea508224f140172cf9a82", size = 7340498, upload-time = "2025-04-28T23:59:48.417Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/26/7e/08d7a75c47792fd07d02b2be6fe6adbb29dfcbd31e94784844d7f730d0bc/vllm-0.8.5-cp38-abi3-manylinux1_x86_64.whl", hash = "sha256:74bfe92953bee1269c1e1c27827bc156777751cdd6a3457ee8e27dd8ebf1e247", size = 326421025, upload-time = "2025-04-28T23:59:40.401Z" },
-]
-
-[[package]]
 name = "wandb"
 version = "0.22.0"
 source = { registry = "https://pypi.org/simple" }
@@ -6001,20 +5904,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/79/d9/7cfd5a312760ac4dd8bf0184a6ee9e43c33e47f3dadc303032ce012b8fa3/wrapt-1.17.3-cp314-cp314t-win_amd64.whl", hash = "sha256:73d496de46cd2cdbdbcce4ae4bcdb4afb6a11234a1df9c085249d55166b95116", size = 41334, upload-time = "2025-08-12T05:53:14.178Z" },
     { url = "https://files.pythonhosted.org/packages/46/78/10ad9781128ed2f99dbc474f43283b13fea8ba58723e98844367531c18e9/wrapt-1.17.3-cp314-cp314t-win_arm64.whl", hash = "sha256:f38e60678850c42461d4202739f9bf1e3a737c7ad283638251e79cc49effb6b6", size = 38471, upload-time = "2025-08-12T05:52:57.784Z" },
     { url = "https://files.pythonhosted.org/packages/1f/f6/a933bd70f98e9cf3e08167fc5cd7aaaca49147e48411c0bd5ae701bb2194/wrapt-1.17.3-py3-none-any.whl", hash = "sha256:7171ae35d2c33d326ac19dd8facb1e82e5fd04ef8c6c0e394d7af55a55051c22", size = 23591, upload-time = "2025-08-12T05:53:20.674Z" },
-]
-
-[[package]]
-name = "xformers"
-version = "0.0.29.post2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "torch" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/27/ed/04ec7ef97a7e1c836add41ef5a2aef8cbdd45c0190ca42cc08f3c21e2b7b/xformers-0.0.29.post2.tar.gz", hash = "sha256:6ca3d1a6db6f2abff25c1154adee96987f77f4dfd5141771805afa5fc13e9395", size = 8468494, upload-time = "2025-02-01T02:33:48.209Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/37/ac/1aca7e44c93876dbda00e80f79c0bda78bc65e236c68ceb2fc6b26f77df5/xformers-0.0.29.post2-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:0d0eb14db56cf08ec3fb9cb36ed5e98de1303411571539ca4dc080c5861e2744", size = 44289739, upload-time = "2025-02-01T02:32:54.559Z" },
-    { url = "https://files.pythonhosted.org/packages/bf/40/1753e0f01f200673f1e02c0ac8ed6f38bac4df02620903daafa9a5676ebe/xformers-0.0.29.post2-cp312-cp312-win_amd64.whl", hash = "sha256:a3ddb47abce3810d3928e8f48b290c0423c7939764a217c2b35ac8124a3cf641", size = 167776625, upload-time = "2025-02-01T02:33:10.82Z" },
 ]
 
 [[package]]
