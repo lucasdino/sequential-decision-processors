@@ -1,0 +1,41 @@
+Start of a transcript of
+
+
+
+Identification number: ////
+Standard interpreter 1.0 (1F) / Library serial number 080126
+Standard Rules version 3/120430 by Graham Nelson
+[switching the story transcript on - succeeded]
+
+>think
+[thinking]
+What a good idea.
+[thinking - failed the block thinking rule]
+
+<score>
+0
+</score><moves>
+1
+</moves>
+>investigate north
+That's not a verb I recognise.
+
+>investigate the room
+That's not a verb I recognise.
+
+>or find an alternativethink
+That's not a verb I recognise.
+
+>turn the switch
+You can't see any such thing.
+
+>investigate the room
+That's not a verb I recognise.
+
+>investigate the room
+That's not a verb I recognise.
+
+>turn the switch
+You can't see any such thing.
+
+>
