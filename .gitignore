@@ -1,6 +1,7 @@
 # directories not to track
 data/
 outputs/
+models/
 
 # games
 tw_games

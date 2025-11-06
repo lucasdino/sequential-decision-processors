@@ -22,8 +22,10 @@ export MKL_NUM_THREADS=8
 # ##############################
 # Define file paths
 # ##############################
-verl_workdir=$HOME/verl_dead_agent/
-DATA_DIR=$HOME/data/verl-agent/text
+HOME_DIR="/home"
+PROJ_DIR=$HOME_DIR/sequential-decision-processors
+verl_workdir=$PROJ_DIR/verl_dead_agent/
+DATA_DIR=$PROJ_DIR/data/verl-agent/text
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/train.parquet
 VAL_PARQUET=$DATA_DIR/test.parquet
@@ -37,7 +39,7 @@ env_seed=2
 env_name=tales_alfworld
 env_max_steps=50
 prompt_template=basecase
-model_path=$HOME/models/Qwen2.5-7B-Instruct
+model_path=$PROJ_DIR/models/Qwen2.5-7B-Instruct
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-7b-rejsampling
 total_epochs=100
@@ -50,17 +52,18 @@ val_prompt_bsz=32
 max_prompt_length=$((512 * 7))
 max_response_length=512
 max_total_length=$((max_prompt_length + max_response_length))
-num_nodes=$SLURM_NNODES
+num_nodes=1
 micro_bs_per_gpu=$((32 / (num_nodes*8)))
 
 
 # We only use data preparation to indicate the modality and the data size.
-python3 -m verl_agent_sdp.examples.data_preprocess.prepare \
+uv run -m verl_agent_sdp.examples.data_preprocess.prepare \
     --mode 'text' \
+    --local_dir ${DATA_DIR} \
     --train_data_size ${train_prompt_bsz} \
     --val_data_size ${val_prompt_bsz}
 
-python3 -m verl-dead-agent.verl.trainer.main_eval \
+uv run -m verl_dead_agent.verl.trainer.main_eval \
     data.train_files=${TRAIN_PARQUET} \
     data.path=${VAL_PARQUET} \
     data.max_prompt_length=${max_prompt_length} \
@@ -87,3 +90,5 @@ python3 -m verl-dead-agent.verl.trainer.main_eval \
     trainer.project_name=${wandb_project_name} \
     trainer.experiment_name=${experiment_name} \
     trainer.n_gpus_per_node=8 \
+
+echo "All done!"
