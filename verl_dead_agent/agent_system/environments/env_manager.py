@@ -1023,6 +1023,7 @@ if __name__ == "__main__":
                 "seed": 1234,
                 "rollout": {"n": 1},          # group_n = 1
                 "prompt_template": "basecase", # used by general manager + projection
+                "reward_mode": "goal-only",
                 "max_steps": 20,
             },
             "data": {
@@ -1070,7 +1071,7 @@ if __name__ == "__main__":
             close_quietly(val_envs)
         print(f"[smoke] Done {env_name}")
 
-    for name in ("tales_alfworld", "tales_textworld"):
+    for name in (["tales_alfworld", "tales_textworld"]):
         try:
             smoke(name)
         except Exception as e:
