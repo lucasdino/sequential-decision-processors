@@ -58,13 +58,13 @@ micro_bs_per_gpu=$((32 / (num_nodes*8)))
 
 
 # We only use data preparation to indicate the modality and the data size.
-uv run -m verl_agent_sdp.examples.data_preprocess.prepare \
+uv run -m examples.data_preprocess.prepare \
     --mode 'text' \
     --local_dir ${DATA_DIR} \
     --train_data_size ${train_prompt_bsz} \
     --val_data_size ${val_prompt_bsz}
 
-uv run -m verl_dead_agent.verl.trainer.main_ppo \
+uv run -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.norm_adv_by_std_in_grpo=False \
