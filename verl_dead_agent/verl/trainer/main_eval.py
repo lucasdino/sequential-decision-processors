@@ -14,7 +14,6 @@
 """
 Offline evaluate the performance of a generated file using reward model and ground truth verifier.
 The input is a parquet file that contains N generated sequences and (optional) the ground truth.
-
 """
 
 from collections import defaultdict

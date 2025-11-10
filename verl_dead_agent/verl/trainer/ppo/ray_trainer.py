@@ -1132,6 +1132,61 @@ class RayPPOTrainer:
                                 timing_raw[key] = value
                             else:
                                 timing_raw[key] += value
+                    
+                    # -------- [START] Updated by Lucas 11/10 --------
+                    # Rejection Sampling Mode: Run inference only (no backprop/training)
+                    # This mode collects trajectories and rewards from the train set to create rejection sampling SFT data.
+                    # You run massive rollouts (up to a specified number) and store trajectories with their rewards,
+                    # which will be used to filter/select high-quality samples for supervised fine-tuning.
+                    if self.config.trainer.get("rejection_sampling", False):
+                        del batch
+                        batch = gen_batch_output
+                        
+                        # Reward function is REQUIRED for rejection sampling
+                        if self.reward_fn is None:
+                            raise ValueError("rejection_sampling mode requires a reward_fn to score trajectories")
+                        
+                        # Compute rewards for all generated trajectories
+                        with _timer("reward", timing_raw):
+                            reward_tensor, reward_extra_infos_dict = compute_reward(batch, self.reward_fn)
+                            batch.batch["token_level_scores"] = reward_tensor
+                            if reward_extra_infos_dict:
+                                batch.non_tensor_batch.update({k: np.array(v) for k, v in reward_extra_infos_dict.items()})
+                        
+                        # MUST dump rollout generations - this is the primary output for rejection sampling
+                        rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
+                        if not rollout_data_dir:
+                            raise ValueError("rejection_sampling mode requires rollout_data_dir to be set for saving trajectories")
+                        
+                        with _timer("dump_rollout_generations", timing_raw):
+                            inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
+                            outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
+                            scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            self._dump_generations(
+                                inputs=inputs,
+                                outputs=outputs,
+                                scores=scores,
+                                reward_extra_infos_dict=reward_extra_infos_dict,
+                                dump_path=rollout_data_dir,
+                            )
+                        
+                        # Log basic metrics
+                        metrics.update({
+                            "training/global_step": self.global_steps,
+                            "training/epoch": epoch,
+                        })
+                        
+                        logger.log(data=metrics, step=self.global_steps)
+                        progress_bar.update(1)
+                        self.global_steps += 1
+                        
+                        if is_last_step:
+                            # pprint(f"Final validation metrics: {last_val_metrics}")
+                            progress_bar.close()
+                            return
+                        
+                        continue  # Skip all training computations below (no backprop!)
+                    # -------- [END] Updated by Lucas 11/10 --------
                                 
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
                         with _timer("gen_max", timing_raw):
