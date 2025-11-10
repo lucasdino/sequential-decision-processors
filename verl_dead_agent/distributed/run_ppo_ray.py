@@ -4,7 +4,7 @@ Launch PPO with one vLLM worker per GPU.
 
 Usage
 -----
-python -m verl_dead_agent.distributed.run_ppo_ray \
+python -m distributed.run_ppo_ray \
        +hydra=override,your,current,flags
 """
 import os, itertools, ray
@@ -60,14 +60,14 @@ def main():
     workers = [VLLMWorker.remote(model_path) for _ in range(n_gpus)]
 
     # 3. patch the rollout LLM so every .generate() goes remote
-    from verl_dead_agent.verl.llm.llm_wrapper import LLMWrapper  # <‑­ existing class that calls vllm
+    from verl.llm.llm_wrapper import LLMWrapper  # <‑­ existing class that calls vllm
     default_sampling = dict(temperature=0.7, top_p=0.95, max_tokens=1024)
     LLMWrapper.generate = make_distributed_generate(workers, default_sampling)
 
     # 4. build hydra config exactly as before and launch training
     with initialize_config_dir("verl-dead-agent/conf"):          # root of your configs
         cfg = compose(config_name="ppo_qwen3_8b")                # or whatever you call it
-    from verl_dead_agent.verl.trainer.main_ppo import train      # unchanged
+    from verl.trainer.main_ppo import train      # unchanged
     train(cfg)
 
 

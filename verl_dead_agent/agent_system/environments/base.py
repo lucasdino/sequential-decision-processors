@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Union, Any
 import torch
 import numpy as np
 import os
-from verl_dead_agent.agent_system.environments.prompts import *
+from agent_system.environments.prompts import *
 from collections import defaultdict
 
 def to_numpy(data):

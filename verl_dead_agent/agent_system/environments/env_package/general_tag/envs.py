@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import ray
 
-from verl_dead_agent.agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
+from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
 
 
 def load_config_file(path):

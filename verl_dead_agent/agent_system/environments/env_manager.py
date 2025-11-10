@@ -7,8 +7,8 @@ import torch
 import numpy as np
 from transformers import AutoTokenizer
 
-from verl_dead_agent.agent_system.environments.prompts import *
-from verl_dead_agent.agent_system.environments.base import EnvironmentManagerBase, to_numpy
+from agent_system.environments.prompts import *
+from agent_system.environments.base import EnvironmentManagerBase, to_numpy
 
 def parse_gamefile(infos):
     gamefile = []
@@ -894,7 +894,7 @@ def make_envs(config):
     group_n = int(config.env.rollout.n) if config.env.rollout.n > 0 else 1
     
     if "tales_" in config.env.env_name.lower():
-        from verl_dead_agent.agent_system.environments.env_package.general_tag import build_general_envs, general_projection
+        from agent_system.environments.env_package.general_tag import build_general_envs, general_projection
         
         # Get the specific environment:
         target_env = config.env.env_name.split("tales_")[-1]

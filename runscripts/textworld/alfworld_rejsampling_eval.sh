@@ -25,7 +25,7 @@ export MKL_NUM_THREADS=8
 HOME_DIR="/home"
 PROJ_DIR=$HOME_DIR/sequential-decision-processors
 verl_workdir=$PROJ_DIR/verl_dead_agent/
-DATA_DIR=$PROJ_DIR/data/verl-agent/text
+DATA_DIR=$PROJ_DIR/data/verl-agent/text/text
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/train.parquet
 VAL_PARQUET=$DATA_DIR/test.parquet
@@ -109,7 +109,6 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.dtype='auto' \
-    actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.max_num_batched_tokens=60000\
     actor_rollout_ref.rollout.temperature=0.8 \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
@@ -123,20 +122,22 @@ uv run -m verl.trainer.main_ppo \
     env.env_name=${env_name} \
     env.seed=${env_seed} \
     env.max_steps=${env_max_steps} \
-    env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
+    env.rollout.n=8 \
+    +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
     +env.prompt_template=${prompt_template} \
     +env.reward_mode="goal-only" \
     +env.num_envs_per_batch=1 \
     \
+    +intermediary.enabled=False \
     \
     +trainer.rejection_sampling=True \
     +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
-    trainer.total_training_steps=1000 \
+    trainer.total_training_steps=10 \
     trainer.logger=["console","wandb"] \
-    trainer.log_val_generations=30 \
+    trainer.log_val_generations=5 \
     trainer.project_name=${wandb_project_name} \
     trainer.experiment_name=${experiment_name} \
-    +trainer.val_before_train=False \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=${num_nodes} \
     trainer.save_freq=${save_freq} \
