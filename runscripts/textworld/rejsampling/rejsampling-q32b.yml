@@ -1,4 +1,4 @@
-name: llmchess-llama4-maverick-rejectionsampling
+name: llmchess-q32b-rejectionsampling
 image: mosaicml/pytorch
 compute:
     gpus: 8

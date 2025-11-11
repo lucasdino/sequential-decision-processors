@@ -109,14 +109,14 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.rollout.dtype='auto' \
-    actor_rollout_ref.rollout.temperature=0.8 \
+    actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.rollout.mode="sync" \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.free_cache_engine=False \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.enable_reasoning=True \
     +actor_rollout_ref.rollout.engine_kwargs.vllm.reasoning_parser="deepseek_r1" \
-    actor_rollout_ref.actor.fsdp_config.fsdp_size=2 \
+    actor_rollout_ref.actor.fsdp_config.fsdp_size=8 \
     +actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
     +actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
     \
