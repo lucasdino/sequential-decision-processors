@@ -69,7 +69,6 @@ dependencies = [
     "fastjsonschema==2.21.2",
     "fastrlock==0.8.3",
     "filelock==3.19.1",
-    "flash-attn==2.7.4.post1",
     "fonttools==4.60.1",
     "fqdn==1.5.1",
     "frozenlist==1.7.0",
