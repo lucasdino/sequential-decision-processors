@@ -133,7 +133,7 @@ uv run -m verl.trainer.main_ppo \
     \
     +trainer.rejection_sampling=True \
     +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
-    trainer.total_training_steps=50 \
+    trainer.total_training_steps=20 \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \
     trainer.project_name=${wandb_project_name} \

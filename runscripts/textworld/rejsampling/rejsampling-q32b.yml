@@ -13,7 +13,7 @@ integrations:
     entity: lucasdino-ucsd
 env_variables:
   SH_FILE: "alfworld_rejsampling_q32b.sh"
-  EXPERIMENT_NAME: "q32b-11-11-v1"
+  EXPERIMENT_NAME: "q32b-11-11-v2"
 command: |-
   # Get env set up on cluster (in /home/...)
   cd home
