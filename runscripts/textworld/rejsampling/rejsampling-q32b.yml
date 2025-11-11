@@ -1,4 +1,4 @@
-name: llmchess-q32b-rejectionsampling
+name: sdp-q32b-rejectionsampling
 image: mosaicml/pytorch
 compute:
     gpus: 8

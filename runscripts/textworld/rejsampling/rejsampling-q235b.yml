@@ -1,4 +1,4 @@
-name: llmchess-q235b-rejectionsampling
+name: sdp-q235b-rejectionsampling
 image: mosaicml/pytorch
 compute:
     gpus: 8

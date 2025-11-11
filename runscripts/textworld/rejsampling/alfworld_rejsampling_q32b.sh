@@ -44,7 +44,7 @@ prompt_template=basecase
 model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-32b-rejsampling
-total_epochs=50
+total_epochs=5
 save_freq=-1
 test_freq=10
 num_cpus_per_env_worker=0.1
@@ -133,7 +133,7 @@ uv run -m verl.trainer.main_ppo \
     \
     +trainer.rejection_sampling=True \
     +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
-    trainer.total_training_steps=20 \
+    trainer.total_training_steps=50 \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \
     trainer.project_name=${wandb_project_name} \
