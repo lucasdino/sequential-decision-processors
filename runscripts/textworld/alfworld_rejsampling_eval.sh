@@ -25,10 +25,10 @@ export MKL_NUM_THREADS=8
 HOME_DIR="/home"
 PROJ_DIR=$HOME_DIR/sequential-decision-processors
 verl_workdir=$PROJ_DIR/verl_dead_agent/
-DATA_DIR=$PROJ_DIR/data/verl-agent/text/text
+DATA_DIR=$PROJ_DIR/data/verl-agent
 ENGINE=${1:-vllm}
-TRAIN_PARQUET=$DATA_DIR/train.parquet
-VAL_PARQUET=$DATA_DIR/test.parquet
+TRAIN_PARQUET=$DATA_DIR/text/train.parquet
+VAL_PARQUET=$DATA_DIR/text/test.parquet
 REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data
 
 
@@ -44,10 +44,9 @@ prompt_template=basecase
 model_path=Qwen/Qwen2.5-7B-Instruct
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-7b-rejsampling
-total_epochs=100
+total_epochs=25
 save_freq=-1
 test_freq=10
-group_size=2
 num_cpus_per_env_worker=0.1
 train_prompt_bsz=32
 val_prompt_bsz=32

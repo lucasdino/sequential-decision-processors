@@ -1,5 +1,4 @@
 name: llmchess-llama4-maverick-rejectionsampling
-image: lucasdino/llm_chess:latest
 compute:
     gpus: 8
     cluster: r8z13p1
@@ -15,13 +14,15 @@ integrations:
     project: llm-chess-rejsampling
     entity: lucasdino-ucsd
 env_variables:
-  SH_FILE: "verl-qwen25-7b-sft-dm36-drgrpo-dm10.sh"
+  SH_FILE: "alfworld_rejsampling_eval.sh"
   EXPERIMENT_NAME: "qwen25_7b_test"
 command: |-
   # Get env set up on cluster (in /home/...)
   cd home
   git clone --recurse-submodules https://github.com/lucasdino/sequential-decision-processors.git
-  cd sequential-decision-processors/verl_dead_agent
+  cd sequential-decision-processors
+  mv runscripts verl_dead_agent/
+  cd verl_dead_agent
 
   pip install uv
   uv venv .venv
@@ -33,11 +34,9 @@ command: |-
   alfworld-download -f
 
   # Run our rejsampling script
-  mv runscripts verl_dead_agent/
-  cd verl_dead_agent
   chmod +x runscripts/*.sh
   runscripts/textworld/$SH_FILE
 
   # Save down rejsample data
   pip install --no-cache-dir awscli
-  aws s3 cp /home/sequential-decision-processors/rej_sampling_data s3://sdp/rej_sampling_data/$EXPERIMENT_NAME --recursive
+  aws s3 cp /home/sequential-decision-processors/rej_sampling_data s3://seq-dec-proc/rej_sampling_data/$EXPERIMENT_NAME --recursive
