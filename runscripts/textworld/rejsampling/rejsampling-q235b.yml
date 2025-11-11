@@ -12,7 +12,7 @@ integrations:
     project: llm-chess-rejsampling
     entity: lucasdino-ucsd
 env_variables:
-  SH_FILE: "alfworld_rejsampling_l4mav.sh"
+  SH_FILE: "alfworld_rejsampling_q235_a30b.sh"
   EXPERIMENT_NAME: "l4mav-11-10-v1"
 command: |-
   # Get env set up on cluster (in /home/...)
