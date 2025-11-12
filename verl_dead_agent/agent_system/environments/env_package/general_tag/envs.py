@@ -7,6 +7,9 @@ import torch
 import ray
 
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
+from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs
+
+ALFWORLD_VERBS = ['go to', 'open', 'close', 'take _ from _', 'move _ to _', 'use', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'inventory', 'look', 'examine']
 
 
 def load_config_file(path):
@@ -43,10 +46,13 @@ class GeneralWorker:
             print("Loading single env: ", env_file_name)
         else:
             self.env = base_env.init_env()  # Each worker holds only one sub-environment
-        print("Fixing twx batch:", self.env)
+        # print("Fixing twx batch:", self.env)
+        
         self.env.seed(seed)
         self.config = config
         self.seed = seed
+        # Store the env_type string from main_config for observation processing
+        self.env_type_string = base_env.main_config['env']['env_name'] if base_env.main_config else None
     
     def step(self, action):
         """Execute a step in the environment"""
@@ -75,26 +81,56 @@ class GeneralWorker:
         actions = [action] 
         
         obs, scores, dones, infos = self.env.step(actions)
-        # print("Obs: ", obs)
+        obs = self._process_obs(obs)
+        infos = self._process_infos(infos)
         infos['observation_text'] = obs
         for i, done in enumerate(dones):
             # Sanity check: make sure that if the game is 'won' or 'lost', the done flag is set to True.
             if infos['won'][i] or infos['lost'][i]:
                 assert done, "Game should be done if won or lost."
-        # print("Step completed with action:", action)
+        
         return obs, scores, dones, infos
     
     def reset(self):
         """Reset the environment"""
         obs, infos = self.env.reset()
+        obs = self._process_obs(obs)
+        infos = self._process_infos(infos)
         infos['observation_text'] = obs
-        # print("Env reset")
-        # print(infos)
-        # print("========================== Episode Reset ==========================")
         return obs, infos
     
     def getobs(self):
         return None
+
+    # ==========================
+    # Updated to allow env specific edits
+    # ==========================
+    def _process_infos(self, infos):
+        if self.env_type_string and "textworld" in self.env_type_string:
+            return infos
+        elif self.env_type_string and "alfworld" in self.env_type_string:
+            infos['verbs'] = [ALFWORLD_VERBS]
+            return infos
+        elif self.env_type_string and "scienceworld" in self.env_type_string:
+            return infos
+        elif self.env_type_string and "twx" in self.env_type_string:
+            return infos
+        else:
+            raise ValueError(f"Please add the env to this process_infos function (even if just identity).")
+
+    def _process_obs(self, obs):
+        """ Functionality for env specific observation processing """
+        if self.env_type_string and "textworld" in self.env_type_string:
+            return (clean_cookingworld_obs(obs[0]),)
+        elif self.env_type_string and "alfworld" in self.env_type_string:
+            return (clean_alfworld_obs(obs[0]),)
+        elif self.env_type_string and "scienceworld" in self.env_type_string:
+            return obs
+        elif self.env_type_string and "twx" in self.env_type_string:
+            return (clean_cookingworld_obs(obs[0]),)
+        else:
+            raise ValueError(f"Please add the env to this process_obs function (even if just identity).")
+
 
 class GeneralEnvs(gym.Env):
     def __init__(self, general_config_path, seed=0, env_num=1, group_n=1, is_train=True, main_config = None, env_kwargs={}):
@@ -172,7 +208,8 @@ class GeneralEnvs(gym.Env):
         print("Len of results from reset:", len(results))
         for i, (obs, info) in enumerate(results):
             for k in info.keys():
-                info[k] = info[k][0] 
+                if isinstance(info[k], list):
+                    info[k] = info[k][0] 
             text_obs_list.append(obs[0])
             self.prev_admissible_commands[i] = info['admissible_commands']
             info_list.append(info)

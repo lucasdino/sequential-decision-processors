@@ -1,4 +1,7 @@
+# Local Testing
+agent_system/environments/sample_outputs
 
+# Various train/model files we want to ignore
 **/*.pt
 **/checkpoints
 **/wget-log

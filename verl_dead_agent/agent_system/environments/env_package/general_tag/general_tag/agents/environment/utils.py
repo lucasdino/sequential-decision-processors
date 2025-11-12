@@ -1,4 +1,4 @@
-import os
+import os, re
 from os.path import join as pjoin
 
 import shutil
@@ -88,3 +88,31 @@ def download(url, dst, desc=None, force=False):
 
     pbar.close()
     return path
+
+
+
+# =======================================
+# Helper functions for processing / cleaning obs and data
+# =======================================
+def clean_cookingworld_obs(text: str) -> str:
+    """
+    Simple function to clean / trim the observation
+    """
+    # Start by cleaning the ascii art
+    m = re.search(r"\${6,}(?![\s\S]*\${6,})([\s\S]*)\Z", text)
+    if not m:
+        text = text
+    else:
+        out = m.group(1)
+        text = re.sub(r"^[ \t\r\n]+", "", out)
+    
+    # Now clean for other things
+    cleaned = re.sub(r"-=\s*.*?\s*=-", "", text)   # Remove the 'location' flags in main obs
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)   # Reduce triple newlines to just double newlines
+    cleaned = cleaned.strip("\n")                  # Remove trailing newlines
+    return cleaned
+
+def clean_alfworld_obs(text: str) -> str:
+    cleaned = re.sub(r"-=\s*.*?\s*=-", "", text)   # Remove the 'location' flags in main obs
+    cleaned = cleaned.strip("\n")                  # Remove trailing newlines
+    return cleaned

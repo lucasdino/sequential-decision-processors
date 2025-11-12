@@ -81,8 +81,7 @@ class GeneralTWEnv(object):
         print(f"use_expert = {self.use_expert}")
 
     def init_n_env(self, game_files):
-        request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, extras=["gamefile"], moves=True)
-
+        request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, verbs=True, extras=["gamefile"], moves=True)
         max_nb_steps_per_episode = self.config["rl"]["training"]["max_nb_steps_per_episode"]
 
         env_id = textworld.gym.register_games(game_files, request_infos,
@@ -100,7 +99,7 @@ class GeneralTWEnv(object):
             framework_name = self.main_config['env']['env_name'].split('_')[-1]
             if framework_name == 'alfworld':
                 wrappers = [AlfredDemangler()]
-                request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, extras=["gamefile"])
+                request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, verbs=True, extras=["gamefile"])
 
                 max_nb_steps_per_episode = self.config["rl"]["training"]["max_nb_steps_per_episode"]
                 
@@ -113,7 +112,7 @@ class GeneralTWEnv(object):
                 env = textworld.gym.make(env_id)
             elif framework_name == 'textworld':
                 # Disable moves bc it seems to be erroring out for some reason.
-                request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, extras=["gamefile"], moves=False)
+                request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, verbs=True, extras=["gamefile"], moves=False)
 
 
                 max_nb_steps_per_episode = self.config["rl"]["training"]["max_nb_steps_per_episode"]

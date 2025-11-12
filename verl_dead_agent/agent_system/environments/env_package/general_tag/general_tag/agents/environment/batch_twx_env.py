@@ -4,6 +4,9 @@ import gymnasium as gym
 import numpy as np
 from .download_game_files import get_seeds_twx, TEXTWORLD_EXPRESS_TASKS
 
+
+COOKINGWORLD_VERBS = ['chop', 'close', 'cook', 'dice', 'drink', 'drop', 'eat', 'examine', 'go', 'insert', 'inventory', 'lock', 'look around', 'open', 'prepare', 'put', 'slice', 'take', 'unlock']
+
 # Base twx class, taken from TALES.
 class TextWorldExpressEnv(gym.Env):
 
@@ -42,10 +45,11 @@ class TextWorldExpressEnv(gym.Env):
         info["score"] = int(info["score"] * 100)
         info["admissible_commands"] = info["validActions"]
         info["extra.walkthrough"] = self.env.getGoldActionSequence()
-        return obs, info
+        info["verbs"] = COOKINGWORLD_VERBS
+        return (obs,), info
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, reward, done, info = self.env.step(action[0])
         info["max_score"] = 100
         info["feedback"] = obs
         info["won"] = info["tasksuccess"]
@@ -53,7 +57,10 @@ class TextWorldExpressEnv(gym.Env):
         info["moves"] = info["numMoves"]
         info["score"] = int(info["score"] * 100)
         info["admissible_commands"] = info["validActions"]
-        return obs, reward, done, info
+        info["verbs"] = COOKINGWORLD_VERBS
+
+        info = dict((k, [v]) for k, v in info.items())     # Need to wrap each elem to match other gens
+        return (obs,), (reward,), (done,), info
 
     def close(self):
         self.env.close()
@@ -63,36 +70,21 @@ class TWXBatchGym(gym.Env):
     def __init__(
         self, tasks, split = "train", max_steps = 100, *args, **kwargs
     ):
-        
-        self.seed = tasks
-        self.tasks = TEXTWORLD_EXPRESS_TASKS
-        self.envs = []
-        print("Seeds:", self.seed)
-        for task in self.tasks:
-            print("Task:", task)
-            env = TextWorldExpressEnv(task[1], task[2], split=split, max_steps=max_steps)
-            print(f'Creating {split} TWX env for game: {task[0]} with params: {task[2]}')
-            self.envs.append(env)
-            
+        # LUCAS - UPDATE -- only allowing one env type per TWX Batch Gym to work with other code
+        self.seeds = tasks
+        self.task = TEXTWORLD_EXPRESS_TASKS[0]   # Only allowing first elem to be our task
+        assert self.task[1] == "cookingworld"    # Otherwise need to adjust the 'verbs' above
+        self.env = TextWorldExpressEnv(self.task[1], self.task[2], split=split, max_steps=max_steps)
 
-    def reset(self, *, seed=None, options=None):
-        for i, env in enumerate(self.envs):
-            env.reset(seed=self.seed[i], options=options)
+    def seed(self, seed):
+        self.cur_seed = seed
+
+    def reset(self, *, seeds=None, options=None):
+        return self.env.reset(seed=self.cur_seed, options=options)
 
     def step(self, action):
-        # Gather all of the obs, reward, done and info into arrays.
-        all_obs = []
-        all_rewards = []
-        all_dones = []
-        all_infos = []
-        for env in self.envs:
-            obs, reward, done, info = env.step(action)
-            all_obs.append(obs)
-            all_rewards.append(reward)
-            all_dones.append(done)
-            all_infos.append(info)
-        return obs, reward, done, info
-
+        return self.env.step(action)
+        
     def close(self):
         for env in self.envs:
             env.close()

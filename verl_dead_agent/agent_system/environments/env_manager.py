@@ -1,4 +1,5 @@
 import os, time
+import json
 from functools import partial
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union, Any
@@ -50,7 +51,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         self.tasks = []
         self.pre_text_obs = obs
 
-        full_text_obs = self.build_text_obs(obs, init=True)
+        full_text_obs = self.build_text_obs(obs, infos=infos, init=True)
         self.print_counter = True
         return {'text': full_text_obs, 'image': None, 'anchor': obs.copy()}, infos
     
@@ -77,7 +78,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         for i, info in enumerate(infos):
             info['is_action_valid'] = to_numpy(valids[i])
 
-        next_observations = {'text': self.build_text_obs(next_obs), 
+        next_observations = {'text': self.build_text_obs(next_obs, infos=infos), 
                              'image': None, 
                              'anchor': next_obs.copy()}
         
@@ -87,13 +88,14 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         return next_observations, rewards, dones, infos
         
 
-    def build_text_obs(self, text_obs: List[str], init: bool = False, history_length: int = 100) -> List[str]:
+    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 100) -> List[str]:
         """
         This function builds the text observation for the agent.
         """
         postprocess_text_obs = []
         for i in range(len(text_obs)):
             # Get last `history_length` steps
+            info = infos[i]
             recent_history = self.buffers[i][-history_length:]
             valid_history_length = len(recent_history)
             start_index = len(self.buffers[i]) - valid_history_length
@@ -129,6 +131,8 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
 
             if self.config['env']['prompt_template'] == "basecase":
                 GENERAL_TEMPLATE = general_INST_FIRST
+            elif self.config['env']['prompt_template'] == 'base_with_verbs':   
+                GENERAL_TEMPLATE = GENERAL_INSTRUCTIONS_WITH_VERBS
             elif self.config['env']['prompt_template'] == 'sctq_inst_first':   
                 GENERAL_TEMPLATE = general_SCRTQ_INST_FIRST
             elif self.config['env']['prompt_template'] == 'inst_first_with_think':
@@ -148,7 +152,8 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 action_history_with_think=action_history_with_think.strip(),
                 current_step=len(self.buffers[i]) + 1,
                 current_observation=text_obs[i],
-                admissible_actions=""
+                admissible_actions="",
+                verbs=info["verbs"]
             )
             postprocess_text_obs.append(obs)
 
@@ -1022,7 +1027,7 @@ if __name__ == "__main__":
                 "env_name": env_name,         # e.g., 'tales_alfworld' or 'tales_scienceworld'
                 "seed": 1234,
                 "rollout": {"n": 1},          # group_n = 1
-                "prompt_template": "basecase", # used by general manager + projection
+                "prompt_template": "base_with_verbs", # used by general manager + projection
                 "reward_mode": "goal-only",
                 "max_steps": 20,
             },
@@ -1052,27 +1057,75 @@ if __name__ == "__main__":
         print(f"[smoke] Trying {env_name} ...")
         config = build_min_config(env_name)
         envs, val_envs = make_envs(config)
+        
+        # Get absolute path to sample_outputs folder
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        sample_outputs_dir = os.path.join(current_file_dir, 'sample_outputs')
+        os.makedirs(sample_outputs_dir, exist_ok=True)
+        
+        def write_step_output(filename, obs, rewards, dones, infos):
+            """Write step output to JSONL file - one line per environment instance"""
+            filepath = os.path.join(sample_outputs_dir, filename)
+            
+            def convert_to_serializable(obj):
+                """Recursively convert numpy/torch types to native Python types"""
+                if isinstance(obj, (np.ndarray, np.generic)):
+                    return obj.tolist()
+                elif isinstance(obj, torch.Tensor):
+                    return obj.detach().cpu().numpy().tolist()
+                elif isinstance(obj, dict):
+                    return {k: convert_to_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, (list, tuple)):
+                    return [convert_to_serializable(item) for item in obj]
+                elif isinstance(obj, (np.integer, np.floating)):
+                    return obj.item()
+                elif hasattr(obj, 'item'):  # numpy scalar
+                    return obj.item()
+                else:
+                    return obj
+            
+            # obs is a dict with 'text', 'image', 'anchor' keys, each containing lists
+            # rewards, dones are lists/arrays
+            # infos is a list of dicts
+            obs_text = obs.get('text', None)
+            
+            # Determine the number of environments
+            num_envs = len(infos)
+            
+            with open(filepath, 'a') as f:
+                # Zip together each environment's data and write one line per env
+                for i in range(num_envs):
+                    output = {
+                        'obs': {
+                            'text': convert_to_serializable(obs_text[i]) if obs_text is not None else None,
+                        },
+                        'reward': convert_to_serializable(rewards[i]),
+                        'done': convert_to_serializable(dones[i]),
+                        'info': convert_to_serializable(infos[i])
+                    }
+                    f.write(json.dumps(output) + '\n')
+        
         try:
             # Train envs
             obs, infos = envs.reset()
             print(f"[smoke] Reset OK (train): n={len(infos)}")
-            text_actions = ["look"] * len(infos)
+            text_actions = ["look around"] * len(infos)
             obs, rewards, dones, infos = envs.step(text_actions)
             print(f"[smoke] Step OK (train): rewards={rewards}, dones={dones}")
+            write_step_output(f'{env_name}_train_step.jsonl', obs, rewards, dones, infos)
 
             # Val envs
-            vobs, vinfos = val_envs.reset()
-            print(f"[smoke] Reset OK (val): n={len(vinfos)}")
-            vtext_actions = ["look"] * len(vinfos)
-            vobs, vrewards, vdones, vinfos = val_envs.step(vtext_actions)
-            print(f"[smoke] Step OK (val): rewards={vrewards}, dones={vdones}")
+            # vobs, vinfos = val_envs.reset()
+            # print(f"[smoke] Reset OK (val): n={len(vinfos)}")
+            # vtext_actions = ["look"] * len(vinfos)
+            # vobs, vrewards, vdones, vinfos = val_envs.step(vtext_actions)
+            # print(f"[smoke] Step OK (val): rewards={vrewards}, dones={vdones}")
+            # write_step_output(f'{env_name}_val_step.jsonl', vobs, vrewards, vdones, vinfos)
         finally:
             close_quietly(envs)
             close_quietly(val_envs)
         print(f"[smoke] Done {env_name}")
 
-    for name in (["tales_alfworld", "tales_textworld"]):
-        try:
-            smoke(name)
-        except Exception as e:
-            print(f"[smoke] Skipping {name}: {e}")
+    # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
+    for name in (["tales_alfworld"]):
+        smoke(name)

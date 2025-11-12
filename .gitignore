@@ -10,6 +10,7 @@ tw_games
 generated_data/
 uploaded_data/
 cleaned_data/
+textworld_synthetic/
 train_data/
 sequential_decision_processors/data/alfworld
 
