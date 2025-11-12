@@ -50,6 +50,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         self.buffers = [[] for _ in range(len(obs))]
         self.tasks = []
         self.pre_text_obs = obs
+        self.prev_rewards = [0 for _ in range(len(obs))]
 
         full_text_obs = self.build_text_obs(obs, infos=infos, init=True)
         self.print_counter = True
@@ -67,6 +68,10 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         elif self.config['env']['reward_mode'] == 'negative-test':
             if not self.ttp_switch:
                 rewards = [r if r < 0 else 0 for r in rewards]
+        elif self.config['env']['reward_mode'] == 'per-step-delta':
+            new_rewards = [r - self.prev_rewards[i] for i, r in enumerate(rewards)]
+            self.prev_rewards = rewards
+            rewards = new_rewards
         else:
             rewards = rewards
 

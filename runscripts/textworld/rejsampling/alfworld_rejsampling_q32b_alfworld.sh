@@ -29,22 +29,24 @@ DATA_DIR=$PROJ_DIR/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/text/train.parquet
 VAL_PARQUET=$DATA_DIR/text/test.parquet
-REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data
+REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
 
 
 
 # ##############################
 # Main training args we'll change
 # ##############################
-env_seed=2
+env_seed=10
 env_name=tales_alfworld
+# env_name can be 'tales_alfworld' or 'tales_twx'
 env_max_steps=50
-prompt_template=basecase
-# model_path=$PROJ_DIR/models/Qwen3-32B
-model_path=Qwen/Qwen3-32B
+prompt_template=base_with_verbs
+model_path=$PROJ_DIR/models/Qwen3-32B
+# model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
-experiment_name=sdp-q25-32b-rejsampling
+experiment_name=sdp-q25-32b-rejsampling-alfworld
 total_epochs=5
+train_steps=1
 save_freq=-1
 test_freq=10
 num_cpus_per_env_worker=0.1
@@ -124,14 +126,14 @@ uv run -m verl.trainer.main_ppo \
     env.rollout.n=2 \
     +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
     +env.prompt_template=${prompt_template} \
-    +env.reward_mode="goal-only" \
+    +env.reward_mode="per-step-delta" \
     +env.num_envs_per_batch=1 \
     \
     +intermediary.enabled=False \
     \
     +trainer.rejection_sampling=True \
     +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
-    trainer.total_training_steps=5 \
+    trainer.total_training_steps=${train_steps} \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \
     trainer.project_name=${wandb_project_name} \
