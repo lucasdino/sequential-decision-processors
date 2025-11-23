@@ -1,4 +1,4 @@
-import os, time
+import os, time, ast
 import json
 from functools import partial
 from collections import defaultdict
@@ -29,21 +29,22 @@ def set_gamefile(infos, gamefile):
     return infos
 
 class GeneralEnvironmentManager(EnvironmentManagerBase):
-    # Added config because it is annoying to have to go into the code to switch values.
-    def __init__(self, envs, projection_f, env_name, istrain = True, config=None):
+    def __init__(self, envs, projection_f, env_name, istrain = True, config=None, use_tokenizer=False):
         self.buffers = None
         self.istrain = istrain
         self.print_counter = False
         self.ttp_switch = False
         self.config = config
         self.env_name = env_name
-        self.tok = AutoTokenizer.from_pretrained(self.config['actor_rollout_ref']['model']['path'], use_fast=True)
+        if use_tokenizer:
+            self.tok = AutoTokenizer.from_pretrained(self.config['actor_rollout_ref']['model']['path'], use_fast=True)
+        else:
+            self.tok = None
         super().__init__(envs, projection_f, env_name)
     
     # Stripped down general manager to handle all of the frameworks from TALES
     def reset(self):
         obs, infos = self.envs.reset()
-
         if self.buffers is not None:
             self.buffers.clear()
 
@@ -1038,10 +1039,10 @@ if __name__ == "__main__":
             },
             "data": {
                 "train_batch_size": 8,        # instantiate a couple envs
-                "val_batch_size": 8,
+                "val_batch_size": 4,
             },
             "actor_rollout_ref": {
-                "model": {"path": "bert-base-uncased"},     # lightweight tokenizer
+                "model": {"path": "models/bert-case"},     # lightweight tokenizer
                 "actor": {"ppo_max_token_len_per_gpu": 8192}
             },
         })
@@ -1059,9 +1060,10 @@ if __name__ == "__main__":
                 pass
 
     def smoke(env_name: str):
-        print(f"[smoke] Trying {env_name} ...")
+
+        # First set up our primary envs
         config = build_min_config(env_name)
-        envs, val_envs = make_envs(config)
+        envs, val_envs = make_envs(config)   # this gets done once in our main ppo code
         
         # Get absolute path to sample_outputs folder
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1092,7 +1094,8 @@ if __name__ == "__main__":
             # obs is a dict with 'text', 'image', 'anchor' keys, each containing lists
             # rewards, dones are lists/arrays
             # infos is a list of dicts
-            obs_text = obs.get('text', None)
+            # obs_text = obs.get('text', None)
+            obs_text = obs
             
             # Determine the number of environments
             num_envs = len(infos)
@@ -1101,9 +1104,7 @@ if __name__ == "__main__":
                 # Zip together each environment's data and write one line per env
                 for i in range(num_envs):
                     output = {
-                        'obs': {
-                            'text': convert_to_serializable(obs_text[i]) if obs_text is not None else None,
-                        },
+                        'obs': convert_to_serializable(obs_text[i]) if obs_text is not None else None,
                         'reward': convert_to_serializable(rewards[i]),
                         'done': convert_to_serializable(dones[i]),
                         'info': convert_to_serializable(infos[i])
@@ -1111,13 +1112,49 @@ if __name__ == "__main__":
                     f.write(json.dumps(output) + '\n')
         
         try:
-            # Train envs
-            obs, infos = envs.reset()
-            print(f"[smoke] Reset OK (train): n={len(infos)}")
-            text_actions = ["look around"] * len(infos)
-            obs, rewards, dones, infos = envs.step(text_actions)
-            print(f"[smoke] Step OK (train): rewards={rewards}, dones={dones}")
-            write_step_output(f'{env_name}_train_step.jsonl', obs, rewards, dones, infos)
+            for j in range(1):
+                # Train envs
+                obs, infos = envs.reset()
+                if env_name == 'tales_alfworld':
+                    gold_paths = [ast.literal_eval(inf["extra.walkthrough"])[0] for inf in infos]
+                elif env_name == 'tales_twx':
+                    gold_paths = [ast.literal_eval(inf["extra.walkthrough"]) for inf in infos]
+
+
+                num_g_steps = 0
+                for g in gold_paths:
+                    num_g_steps += len(g)
+                print(num_g_steps)
+
+                num_envs = len(envs.envs.workers)
+                finished = [False] * num_envs
+                
+                start_step = 1 if env_name == "tales_twx" else 0
+                for step in range(start_step, 30):
+                    if all(finished):
+                        break  # all envs finished
+
+                    text_actions = [g[step] if step < len(g) else "env_done" for g in gold_paths]
+                    print(text_actions)
+                    obs, rewards, dones, infos = envs.step(text_actions)
+
+                    keep_mask = []
+                    for i, d in enumerate(dones):
+                        if not finished[i]:
+                            keep_mask.append(True)
+                            if d:
+                                finished[i] = True
+                        else:
+                            keep_mask.append(False)
+
+                    print(f"{step:>3}: {sum(keep_mask)}")
+                    filtered_obs   = [x for x, keep in zip(obs['text'], keep_mask) if keep]
+                    filtered_rews  = [x for x, keep in zip(rewards,       keep_mask) if keep]
+                    filtered_infos = [x for x, keep in zip(infos,         keep_mask) if keep]
+                    filtered_dones = [x for x, keep in zip(dones,         keep_mask) if keep]
+
+                    if filtered_obs:
+                        write_step_output(f'{env_name}_train_step.jsonl', filtered_obs, filtered_rews, filtered_dones, filtered_infos)
 
             # Val envs
             # vobs, vinfos = val_envs.reset()
@@ -1132,5 +1169,5 @@ if __name__ == "__main__":
         print(f"[smoke] Done {env_name}")
 
     # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
-    for name in (["tales_alfworld"]):
+    for name in (["tales_twx"]):
         smoke(name)

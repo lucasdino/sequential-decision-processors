@@ -22,7 +22,7 @@ def general_projection(prompt, actions: List[str]) -> Tuple[List[str], List[int]
             parsed_actions[i] = am[-1].group(1).strip()  # keep original casing/content
             valids[i] = 1
         else:
-            parsed_actions[i] = generation.lower()[-30:]
+            parsed_actions[i] = generation.lower()[-125:]
 
         # last <think>…</think> must exist (case-sensitive)
         tm = list(THINK_RE.finditer(generation))

@@ -59,7 +59,7 @@ TEXTWORLD_EXPRESS_TASKS = [
     (
         "CookingWorld",
         "cookingworld",
-        "numLocations=1, numIngredients=2, numDistractorItems=5, includeDoors=0, limitInventorySize=0",
+        "numLocations=3, numIngredients=3, numDistractorItems=5, includeDoors=1, limitInventorySize=1",
     ),
     # (
     #     "TextWorldCommonsense",
@@ -146,13 +146,14 @@ TALES_CACHE_ALFWORLD_VALID_SEEN = pjoin(
 TALES_CACHE_ALFWORLD_VALID_UNSEEN = pjoin(
     TALES_CACHE_ALFWORLD, "json_2.1.1", "valid_unseen"
 )
+TALES_CACHE_ALFWORLD_TRAIN = pjoin(
+    TALES_CACHE_ALFWORLD, "json_2.1.1", "train"
+)
 
 
 def prepare_alfworld_data(force=False):
     os.makedirs(TALES_CACHE_ALFWORLD, exist_ok=True)
-    data_exists = os.path.exists(TALES_CACHE_ALFWORLD_VALID_SEEN) and os.path.exists(
-        TALES_CACHE_ALFWORLD_VALID_UNSEEN
-    )
+    data_exists = os.path.exists(TALES_CACHE_ALFWORLD_VALID_SEEN) and os.path.exists(TALES_CACHE_ALFWORLD_VALID_UNSEEN) and os.path.exists(TALES_CACHE_ALFWORLD_TRAIN)
     if data_exists and not force:
         return
 

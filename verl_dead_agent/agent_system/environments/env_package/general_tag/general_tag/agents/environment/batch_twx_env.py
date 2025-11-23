@@ -5,7 +5,7 @@ import numpy as np
 from .download_game_files import get_seeds_twx, TEXTWORLD_EXPRESS_TASKS
 
 
-COOKINGWORLD_VERBS = ['chop _ with _', 'cook _ with _', 'dice _ with _', 'drop', 'eat meal', 'examine', 'go', 'inventory', 'open', 'prepare meal', 'slice _ with _', 'take', 'take _ from _']
+COOKINGWORLD_VERBS = ["chop _ with _", "cook _ with _", "dice _ with _", "drop", "eat meal", "examine", "go", "inventory", "open", "prepare meal", "slice _ with _", "take", "take _ from _"]
 
 # Base twx class, taken from TALES.
 class TextWorldExpressEnv(gym.Env):
@@ -18,16 +18,10 @@ class TextWorldExpressEnv(gym.Env):
         self.admissible_commands = admissible_commands
         self.env = twx.TextWorldExpressEnv(envStepLimit=max_steps)
         self.split = split
-        self.seeds = get_seeds_twx(split=split, env=self.env)
-        self.seed = self.seeds[0]
-        print(f"Self.Seed: {self.seed}")
 
-    def reset(self, *, seed=None, options=None):
-        if seed is not None:
-            self.seed = self.seeds[seed % len(self.seeds)]
-
+    def reset(self, seed, *, options=None):
         obs, info = self.env.reset(
-            seed=self.seed,
+            seed=seed,
             gameFold=self.split,
             gameName=self.game_name,
             gameParams=self.game_params,
@@ -70,18 +64,15 @@ class TWXBatchGym(gym.Env):
     def __init__(
         self, tasks, split = "train", max_steps = 100, *args, **kwargs
     ):
-        # LUCAS - UPDATE -- only allowing one env type per TWX Batch Gym to work with other code
         self.seeds = tasks
+        self.tasks = TEXTWORLD_EXPRESS_TASKS
         self.task = TEXTWORLD_EXPRESS_TASKS[0]   # Only allowing first elem to be our task
         assert self.task[1] == "cookingworld"    # Otherwise need to adjust the 'verbs' above
         self.env = TextWorldExpressEnv(self.task[1], self.task[2], split=split, max_steps=max_steps)
 
-    def seed(self, seed):
-        self.cur_seed = seed
-
-    def reset(self, *, seeds=None, options=None):
-        return self.env.reset(seed=self.cur_seed, options=options)
-
+    def reset(self, seed, *, options=None):
+        return self.env.reset(seed=seed, options=options)
+        
     def step(self, action):
         return self.env.step(action)
         

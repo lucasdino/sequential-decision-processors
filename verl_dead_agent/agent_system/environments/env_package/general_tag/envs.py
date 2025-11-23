@@ -22,59 +22,57 @@ def load_config_file(path):
 def compute_reward(info, done):
     reward = 0
     if info['won']:
-        reward = 10
+        reward = 1
     elif info['lost']:
-        reward = -5
-    else:
-        # If the agent made some number of moves that are actually valid in the environment
-        if 'moves' in info.keys():
-            if info['moves'] > 0 and done:
-                reward = 0.3 * info['moves']
-
+        reward = -0.5
+    # else:
+    #     # If the agent made some number of moves that are actually valid in the environment
+    #     if 'moves' in info.keys():
+    #         if info['moves'] > 0 and done:
+    #             reward = 0.3 * info['moves']
     return float(reward)
+
+
+
 
 @ray.remote(num_cpus=0.25)
 class GeneralWorker:
-    """
-    Ray remote actor that replaces the worker function.
-    Each actor holds one environment instance.
-    """
-    
-    def __init__(self, config, seed, base_env, env_file_name=None):
+    """ Ray remote actor that replaces the worker function. Each actor holds one environment instance. """
+    def __init__(self, config, base_env, env_file_name=None):
+        # Old code from chris - currently just going thru else branch
         if env_file_name is not None:
             self.env = base_env.init_n_env([env_file_name])
             print("Loading single env: ", env_file_name)
         else:
-            self.env = base_env.init_env()  # Each worker holds only one sub-environment
-        # print("Fixing twx batch:", self.env)
+            self.env = base_env.init_env()  
         
-        self.env.seed(seed)
+        # General instantiation
+        self.my_seed = None
         self.config = config
-        self.seed = seed
-        # Store the env_type string from main_config for observation processing
         self.env_type_string = base_env.main_config['env']['env_name'] if base_env.main_config else None
     
     def step(self, action):
         """Execute a step in the environment"""
-        if len(action) > 50:
-            print("Action too long, truncated to 50 chars: ", action)
-            action = action[:50]
+        if len(action) > 100:
+            print("Action too long, truncated to 100 chars: ", action)
+            action = action[:100]
         elif 'restart' in action:
             action = action.replace("restart", "")
         elif 'exit' in action:
             action = action.replace("exit", "")
         elif 'save' in action:
             action = action.replace("save", "")
+        
         # Not sure why this action is crashing the game but try to deal with it:
         special_chars = ['\\', '/', '<', '>', '|', '*', '?', '"', '\'', '`', '$', '#', '&', ';', '(', ')', '{', '}', '[', ']', '%', '@', '+', '=', '-', ':', ',', '.', '!', '^', 'action']
         for char in special_chars:
             action = action.replace(char, "")
+        
+        # Test if it's valid UTF-8
         try:
-            # Test if it's valid UTF-8
             action_bytes = action.encode('utf-8')
             # print(" Action '{}' was truncated to '{}'.".format(action, action_bytes.decode()))
         except UnicodeEncodeError:
-            # Convert to bytes first
             print("Encoded error tripped, original action: ", action)
             action = action.encode('latin-1')
 
@@ -91,9 +89,14 @@ class GeneralWorker:
         
         return obs, scores, dones, infos
     
-    def reset(self):
+    def reset(self, seed):
         """Reset the environment"""
-        obs, infos = self.env.reset()
+        self.my_seed = seed
+        if self.env_type_string == "tales_alfworld":
+            obs, infos = self.env.reset(game_file=seed)
+        else:
+            obs, infos = self.env.reset(seed)
+
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
         infos['observation_text'] = obs
@@ -131,36 +134,52 @@ class GeneralWorker:
         else:
             raise ValueError(f"Please add the env to this process_obs function (even if just identity).")
 
+    # For testing ray processes
+    def ping(self):
+        return f"Hi from worker with seed {self.my_seed}"
+
+
+
 
 class GeneralEnvs(gym.Env):
     def __init__(self, general_config_path, seed=0, env_num=1, group_n=1, is_train=True, main_config = None, env_kwargs={}):
+        """  Purpose of this is to be an env wrapper that manages the underlying workers. """
         super().__init__()
         
-        # Initialize Ray if not already initialized
+        # Start by initializing Ray (if not initialized)
         if not ray.is_initialized():
             ray.init()
-            
-        eval_dataset = env_kwargs.get('eval_dataset', 'eval_in_distribution')
-        config = load_config_file(general_config_path)
-
-        env_type = config['env']['type']
-        self.main_config = main_config
-        base_env = get_environment(env_type)(config, train_eval='train' if is_train else 'test', main_config = main_config)
         
+        eval_dataset = env_kwargs.get('eval_dataset', 'eval_in_distribution')
+
+        config = load_config_file(general_config_path)
+        self.env_type = config['env']['type']
+        self.main_config = main_config
+
+        # base_env is a 'GeneralTWEnv'
+        base_env = get_environment(self.env_type)(config, train_eval='train' if is_train else 'test', main_config = main_config)
+
+        # 'base_env.game_files' gives us our seeds we'll manage:
+        #     - For twx this is a list of ints (seeds)
+        #     - For alfworld this is a list of files (pddl)
+        self.max_seed_idx = len(base_env.game_files)
+        self.cur_seed_idx = 0
+        self.seeds = base_env.game_files
+
         self.multi_modal = False
         self.num_processes = env_num * group_n
         self.group_n = group_n
 
-        # # Create Ray remote actors instead of processes
+        # Create Ray remote actors instead of processes
         self.workers = []
         for i in range(self.num_processes):
-            worker = GeneralWorker.remote(config, seed + (i // self.group_n), base_env)
+            worker = GeneralWorker.remote(config, base_env)
             self.workers.append(worker)
 
         self.prev_admissible_commands = [None for _ in range(len(self.workers))]
 
     def step(self, actions):
-        assert len(actions) == self.num_processes, \
+        assert len(actions) == len(self.workers), \
             "The num of actions must be equal to the num of processes"
 
         # Send step commands to all workers
@@ -178,7 +197,10 @@ class GeneralEnvs(gym.Env):
         results = ray.get(futures)
         for i, (obs, scores, dones, info) in enumerate(results):
             for k in info.keys():
-                info[k] = info[k][0]
+                if k == "extra.walkthrough" or k == 'verbs':
+                    info[k] = str(info[k])
+                else:
+                    info[k] = info[k][0]
 
             text_obs_list.append(obs[0])
             dones_list.append(dones[0])
@@ -199,21 +221,31 @@ class GeneralEnvs(gym.Env):
 
         # Send reset commands to all workers
         futures = []
-        for worker in self.workers:
-            future = worker.reset.remote()
+        for idx, worker in enumerate(self.workers):
+            if int(self.cur_seed_idx) == self.max_seed_idx:
+                for worker in self.workers[idx:]:
+                    ray.kill(worker)
+                self.workers = self.workers[:idx]
+                break  # kill remaining ray workers (finished seeds) and break
+            
+            future = worker.reset.remote(self.seeds[int(self.cur_seed_idx)])
+            self.cur_seed_idx = self.cur_seed_idx + 1/self.group_n
             futures.append(future)
 
         # Collect results
         results = ray.get(futures)
-        print("Len of results from reset:", len(results))
+        # print("Len of results from reset:", len(results))
         for i, (obs, info) in enumerate(results):
             for k in info.keys():
+                if k == "extra.walkthrough" or k == 'verbs':
+                    info[k] = str(info[k])
                 if isinstance(info[k], list):
                     info[k] = info[k][0] 
             text_obs_list.append(obs[0])
             self.prev_admissible_commands[i] = info['admissible_commands']
             info_list.append(info)
 
+        # self.ping_workers()
         return text_obs_list, info_list
 
     @property
@@ -224,13 +256,17 @@ class GeneralEnvs(gym.Env):
         """
         return self.prev_admissible_commands
 
+    # =====================
+    # Ray helpers / debug
+    # =====================
+    def ping_workers(self):
+        msgs = ray.get([w.ping.remote() for w in self.workers])
+        print(msgs)
+
     def close(self):
-        """
-        Close all workers
-        """
-        # Kill all Ray actors
         for worker in self.workers:
             ray.kill(worker)
+
 
 def build_general_envs(general_config_path, seed, env_num, group_n, is_train=True, main_config = None, env_kwargs={}):
     return GeneralEnvs(general_config_path, seed, env_num, group_n, is_train, main_config=main_config, env_kwargs=env_kwargs)
