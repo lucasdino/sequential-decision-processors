@@ -116,3 +116,12 @@ def clean_alfworld_obs(text: str) -> str:
     cleaned = re.sub(r"-=\s*.*?\s*=-", "", text)   # Remove the 'location' flags in main obs
     cleaned = cleaned.strip("\n")                  # Remove trailing newlines
     return cleaned
+
+def get_necessary_context(text: str) -> str:
+    context_trigger = "Gather all following ingredients and follow the directions to prepare this tasty meal."
+    ctx = None
+    if context_trigger in text:
+        s = text.split(context_trigger, 1)[1].replace("\r", "")
+        ctx = s.rstrip("\n").lstrip("\n")
+        ctx = f"Your recipe is:\n{ctx}"
+    return ctx

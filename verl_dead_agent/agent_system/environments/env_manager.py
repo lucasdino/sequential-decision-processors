@@ -1,9 +1,11 @@
 import os, time, ast
 import json
+from pathlib import Path
 from functools import partial
 from collections import defaultdict
 from typing import List, Tuple, Dict, Union, Any
 
+import ray
 import torch
 import numpy as np
 from transformers import AutoTokenizer
@@ -29,7 +31,7 @@ def set_gamefile(infos, gamefile):
     return infos
 
 class GeneralEnvironmentManager(EnvironmentManagerBase):
-    def __init__(self, envs, projection_f, env_name, istrain = True, config=None, use_tokenizer=False):
+    def __init__(self, envs, projection_f, env_name, istrain = True, config=None, use_tokenizer=True):
         self.buffers = None
         self.istrain = istrain
         self.print_counter = False
@@ -37,7 +39,8 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         self.config = config
         self.env_name = env_name
         if use_tokenizer:
-            self.tok = AutoTokenizer.from_pretrained(self.config['actor_rollout_ref']['model']['path'], use_fast=True)
+            tok_path = f'./agent_system/environments/tokenizers/{config['env']['tokenizer']}'
+            self.tok = AutoTokenizer.from_pretrained(tok_path, use_fast=True, local_files_only=True)
         else:
             self.tok = None
         super().__init__(envs, projection_f, env_name)
@@ -94,7 +97,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         return next_observations, rewards, dones, infos
         
 
-    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 100) -> List[str]:
+    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 5) -> List[str]:
         """
         This function builds the text observation for the agent.
         """
@@ -139,6 +142,8 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 GENERAL_TEMPLATE = general_INST_FIRST
             elif self.config['env']['prompt_template'] == 'base_with_verbs':   
                 GENERAL_TEMPLATE = GENERAL_INSTRUCTIONS_WITH_VERBS
+            elif self.config['env']['prompt_template'] == 'base_with_verbs_context':   
+                GENERAL_TEMPLATE = GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT
             elif self.config['env']['prompt_template'] == 'sctq_inst_first':   
                 GENERAL_TEMPLATE = general_SCRTQ_INST_FIRST
             elif self.config['env']['prompt_template'] == 'inst_first_with_think':
@@ -150,20 +155,54 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
             else:
                 raise ValueError(f"Unknown prompt template: {self.config.env.prompt_template}")
 
+            necessary_context = NECESSARY_CONTEXT.format(necessary_context=info['necessary_context']) if info['necessary_context'] != "None" else ""
+            action_history = action_history.strip()
+            action_history_special_token = '[ACTION_HISTORY_TOKEN]'
+            
             obs = GENERAL_TEMPLATE.format(
                 task_description=[],
                 step_count=len(self.buffers[i]),
                 history_length=valid_history_length,
-                action_history=action_history.strip(),
+                action_history=action_history_special_token,
                 action_history_with_think=action_history_with_think.strip(),
                 current_step=len(self.buffers[i]) + 1,
                 current_observation=text_obs[i],
                 admissible_actions="",
-                verbs=info["verbs"]
+                verbs=info["verbs"],
+                necessary_context=necessary_context
             )
+            obs = self.limit_tokencount_obs(obs, action_history, action_history_special_token)
             postprocess_text_obs.append(obs)
 
         return postprocess_text_obs
+
+
+    def limit_tokencount_obs(self, obs, action_history, action_history_special_token):
+        """
+        Truncate `action_history` so that when it is substituted into `obs`
+        (at `action_history_special_token`) the total prompt length stays
+        within `self.config['data']['max_prompt_length']` minus a 128–token
+        margin.
+        """
+        assert self.tok is not None
+
+        max_prompt_len = self.config["data"]["max_prompt_length"]
+        margin = 128
+        obs_token_ids = self.tok.encode(obs, add_special_tokens=False)
+        obs_len = len(obs_token_ids)
+        max_history_tokens = max_prompt_len - margin - obs_len
+        if max_history_tokens <= 0:
+            truncated_history = ""
+        else:
+            history_ids = self.tok.encode(action_history, add_special_tokens=False)
+            if len(history_ids) <= max_history_tokens:
+                truncated_ids = history_ids
+            else:
+                truncated_ids = history_ids[-max_history_tokens:]
+            truncated_history = self.tok.decode(truncated_ids, skip_special_tokens=False)
+        new_obs = obs.replace(action_history_special_token, truncated_history, 1)
+        return new_obs
+
 
     def save_to_history_buffer(self, text_obs, actions, thinking_trace):
         for i in range(len(actions)):
@@ -1033,13 +1072,15 @@ if __name__ == "__main__":
                 "env_name": env_name,         # e.g., 'tales_alfworld' or 'tales_scienceworld'
                 "seed": 1234,
                 "rollout": {"n": 1},          # group_n = 1
-                "prompt_template": "base_with_verbs", # used by general manager + projection
+                "prompt_template": "base_with_verbs_context", # used by general manager + projection
                 "reward_mode": "goal-only",
                 "max_steps": 20,
+                "tokenizer": "qwen25"
             },
             "data": {
                 "train_batch_size": 8,        # instantiate a couple envs
                 "val_batch_size": 4,
+                "max_prompt_length": 512*3
             },
             "actor_rollout_ref": {
                 "model": {"path": "models/bert-case"},     # lightweight tokenizer
@@ -1121,10 +1162,10 @@ if __name__ == "__main__":
                     gold_paths = [ast.literal_eval(inf["extra.walkthrough"]) for inf in infos]
 
 
-                num_g_steps = 0
-                for g in gold_paths:
-                    num_g_steps += len(g)
-                print(num_g_steps)
+                # num_g_steps = 0
+                # for g in gold_paths:
+                #     num_g_steps += len(g)
+                # print(num_g_steps)
 
                 num_envs = len(envs.envs.workers)
                 finished = [False] * num_envs
@@ -1135,7 +1176,7 @@ if __name__ == "__main__":
                         break  # all envs finished
 
                     text_actions = [g[step] if step < len(g) else "env_done" for g in gold_paths]
-                    print(text_actions)
+                    # print(text_actions)
                     obs, rewards, dones, infos = envs.step(text_actions)
 
                     keep_mask = []
@@ -1147,7 +1188,7 @@ if __name__ == "__main__":
                         else:
                             keep_mask.append(False)
 
-                    print(f"{step:>3}: {sum(keep_mask)}")
+                    # print(f"{step:>3}: {sum(keep_mask)}")
                     filtered_obs   = [x for x, keep in zip(obs['text'], keep_mask) if keep]
                     filtered_rews  = [x for x, keep in zip(rewards,       keep_mask) if keep]
                     filtered_infos = [x for x, keep in zip(infos,         keep_mask) if keep]
@@ -1169,5 +1210,5 @@ if __name__ == "__main__":
         print(f"[smoke] Done {env_name}")
 
     # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
-    for name in (["tales_twx"]):
+    for name in (["tales_alfworld", "tales_twx"]):
         smoke(name)

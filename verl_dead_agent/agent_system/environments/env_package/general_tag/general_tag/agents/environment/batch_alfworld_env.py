@@ -1,8 +1,9 @@
 import textworld
 import textworld.gym
+import gymnasium as gym
 
 
-class AlfworldResetEnv:
+class AlfworldResetEnv(gym.Env):
     """
     Gym-make-style TextWorld env with reset(game_file=...).
     Construct it exactly where you'd normally do register_games + make.

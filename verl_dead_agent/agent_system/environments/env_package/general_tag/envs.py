@@ -7,7 +7,7 @@ import torch
 import ray
 
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
-from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs
+from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs, get_necessary_context
 
 ALFWORLD_VERBS = ['go to', 'open', 'close', 'take _ from _', 'move _ to _', 'use', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'inventory', 'look', 'examine']
 
@@ -47,6 +47,7 @@ class GeneralWorker:
             self.env = base_env.init_env()  
         
         # General instantiation
+        self.necessary_context = None
         self.my_seed = None
         self.config = config
         self.env_type_string = base_env.main_config['env']['env_name'] if base_env.main_config else None
@@ -113,10 +114,14 @@ class GeneralWorker:
             return infos
         elif self.env_type_string and "alfworld" in self.env_type_string:
             infos['verbs'] = [ALFWORLD_VERBS]
+            infos['seed'] = self.my_seed
+            infos['necessary_context'] = self.necessary_context
             return infos
         elif self.env_type_string and "scienceworld" in self.env_type_string:
             return infos
         elif self.env_type_string and "twx" in self.env_type_string:
+            infos['necessary_context'] = self.necessary_context
+            infos['seed'] = self.my_seed
             return infos
         else:
             raise ValueError(f"Please add the env to this process_infos function (even if just identity).")
@@ -124,20 +129,25 @@ class GeneralWorker:
     def _process_obs(self, obs):
         """ Functionality for env specific observation processing """
         if self.env_type_string and "textworld" in self.env_type_string:
-            return (clean_cookingworld_obs(obs[0]),)
+            obs = clean_cookingworld_obs(obs[0])
+            ctx = get_necessary_context(obs)
+            self.necessary_context = ctx if ctx else self.necessary_context
+            return (obs,)
         elif self.env_type_string and "alfworld" in self.env_type_string:
             return (clean_alfworld_obs(obs[0]),)
         elif self.env_type_string and "scienceworld" in self.env_type_string:
             return obs
         elif self.env_type_string and "twx" in self.env_type_string:
-            return (clean_cookingworld_obs(obs[0]),)
+            obs = clean_cookingworld_obs(obs[0])
+            ctx = get_necessary_context(obs)
+            self.necessary_context = ctx if ctx else self.necessary_context
+            return (obs,)
         else:
             raise ValueError(f"Please add the env to this process_obs function (even if just identity).")
 
     # For testing ray processes
     def ping(self):
         return f"Hi from worker with seed {self.my_seed}"
-
 
 
 
@@ -197,7 +207,7 @@ class GeneralEnvs(gym.Env):
         results = ray.get(futures)
         for i, (obs, scores, dones, info) in enumerate(results):
             for k in info.keys():
-                if k == "extra.walkthrough" or k == 'verbs':
+                if k == "extra.walkthrough" or k == 'verbs' or k == 'seed' or k == 'necessary_context':
                     info[k] = str(info[k])
                 else:
                     info[k] = info[k][0]
@@ -237,7 +247,7 @@ class GeneralEnvs(gym.Env):
         # print("Len of results from reset:", len(results))
         for i, (obs, info) in enumerate(results):
             for k in info.keys():
-                if k == "extra.walkthrough" or k == 'verbs':
+                if k == "extra.walkthrough" or k == 'verbs' or k == 'seed' or k == 'necessary_context':
                     info[k] = str(info[k])
                 if isinstance(info[k], list):
                     info[k] = info[k][0] 

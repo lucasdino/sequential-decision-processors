@@ -29,7 +29,7 @@ DATA_DIR=$PROJ_DIR/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/text/train.parquet
 VAL_PARQUET=$DATA_DIR/text/test.parquet
-REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/twx
+REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
 
 
 
@@ -37,14 +37,15 @@ REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/twx
 # Main training args we'll change
 # ##############################
 env_seed=10
-env_name=tales_twx
+env_name=tales_alfworld
 # env_name can be 'tales_alfworld' or 'tales_twx'
 env_max_steps=50
-prompt_template=base_with_verbs
+prompt_template=base_with_verbs_context
+tokenizer_type=qwen3
 model_path=$PROJ_DIR/models/Qwen3-32B
 # model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
-experiment_name=sdp-q25-32b-rejsampling-twx
+experiment_name=sdp-q25-32b-rejsampling-alfworld
 total_epochs=5
 train_steps=5
 save_freq=-1
@@ -53,7 +54,7 @@ num_cpus_per_env_worker=0.1
 train_prompt_bsz=32
 val_prompt_bsz=32
 max_prompt_length=$((512 * 5))
-max_response_length=512
+max_response_length=$((512 * 3))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
 micro_bs_per_gpu=$((32 / (num_nodes*8)))
@@ -123,11 +124,12 @@ uv run -m verl.trainer.main_ppo \
     env.env_name=${env_name} \
     env.seed=${env_seed} \
     env.max_steps=${env_max_steps} \
-    env.rollout.n=2 \
+    env.rollout.n=1 \
     +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
     +env.prompt_template=${prompt_template} \
-    +env.reward_mode="per-step-delta" \
+    +env.reward_mode="goal-only" \
     +env.num_envs_per_batch=1 \
+    +env.tokenizer=${tokenizer_type} \
     \
     +intermediary.enabled=False \
     \

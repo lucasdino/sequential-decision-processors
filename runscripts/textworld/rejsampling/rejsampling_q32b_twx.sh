@@ -29,29 +29,32 @@ DATA_DIR=$PROJ_DIR/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/text/train.parquet
 VAL_PARQUET=$DATA_DIR/text/test.parquet
-REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data
+REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
 
 
 
 # ##############################
 # Main training args we'll change
 # ##############################
-env_seed=2
-env_name=tales_alfworld
+env_seed=10
+env_name=tales_twx
+# env_name can be 'tales_alfworld' or 'tales_twx'
 env_max_steps=50
-prompt_template=basecase
-# model_path=$PROJ_DIR/models/Qwen2.5-7B-Instruct
-model_path=Qwen/Qwen2.5-7B-Instruct
+prompt_template=base_with_verbs_context
+tokenizer_type=qwen3
+model_path=$PROJ_DIR/models/Qwen3-32B
+# model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
-experiment_name=sdp-q25-7b-rejsampling
-total_epochs=25
+experiment_name=sdp-q25-32b-rejsampling-twx
+total_epochs=5
+train_steps=5
 save_freq=-1
 test_freq=10
 num_cpus_per_env_worker=0.1
 train_prompt_bsz=32
 val_prompt_bsz=32
-max_prompt_length=$((512 * 7))
-max_response_length=512
+max_prompt_length=$((512 * 5))
+max_response_length=$((512 * 3))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
 micro_bs_per_gpu=$((32 / (num_nodes*8)))
@@ -106,35 +109,35 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${micro_bs_per_gpu} \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${max_total_length} \
     actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=${max_total_length} \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.rollout.dtype='auto' \
-    actor_rollout_ref.rollout.max_num_batched_tokens=60000\
-    actor_rollout_ref.rollout.temperature=0.8 \
+    actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True \
     actor_rollout_ref.rollout.mode="sync" \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.free_cache_engine=False \
-    actor_rollout_ref.actor.fsdp_config.fsdp_size=2 \
+    actor_rollout_ref.actor.fsdp_config.fsdp_size=8 \
     +actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
     +actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
     \
     env.env_name=${env_name} \
     env.seed=${env_seed} \
     env.max_steps=${env_max_steps} \
-    env.rollout.n=2 \
+    env.rollout.n=1 \
     +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
     +env.prompt_template=${prompt_template} \
     +env.reward_mode="goal-only" \
     +env.num_envs_per_batch=1 \
+    +env.tokenizer=${tokenizer_type} \
     \
     +intermediary.enabled=False \
     \
     +trainer.rejection_sampling=True \
     +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
-    trainer.total_training_steps=10 \
-    trainer.logger=["console","wandb"] \
-    trainer.log_val_generations=5 \
+    trainer.total_training_steps=${train_steps} \
+    trainer.logger=['wandb'] \
+    trainer.log_val_generations=0 \
     trainer.project_name=${wandb_project_name} \
     trainer.experiment_name=${experiment_name} \
     trainer.val_before_train=False \
@@ -144,6 +147,3 @@ uv run -m verl.trainer.main_ppo \
     trainer.test_freq=${test_freq} \
     trainer.total_epochs=${total_epochs} \
     trainer.max_actor_ckpt_to_keep=1 \
-
-
-echo "All done!"
