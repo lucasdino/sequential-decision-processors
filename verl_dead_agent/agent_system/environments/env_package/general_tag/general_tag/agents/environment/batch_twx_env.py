@@ -52,8 +52,6 @@ class TextWorldExpressEnv(gym.Env):
         info["score"] = int(info["score"] * 100)
         info["admissible_commands"] = info["validActions"]
         info["verbs"] = COOKINGWORLD_VERBS
-
-        info = dict((k, [v]) for k, v in info.items())     # Need to wrap each elem to match other gens
         return (obs,), (reward,), (done,), info
 
     def close(self):

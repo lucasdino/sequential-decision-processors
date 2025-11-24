@@ -14,6 +14,7 @@ dependencies = [
     "pandas>=2.3.3",
     "scienceworld>=1.2.3",
     "textworld-express>=1.1.0",
+    "transformers>=4.57.1",
 ]
 
 [build-system]

@@ -1,4 +1,4 @@
-import os
+import os, ast
 import yaml
 import gymnasium as gym
 from gymnasium import spaces
@@ -21,9 +21,9 @@ def load_config_file(path):
 
 def compute_reward(info, done):
     reward = 0
-    if info['won']:
+    if info['env_provided']['won']:
         reward = 1
-    elif info['lost']:
+    elif info['env_provided']['lost']:
         reward = -0.5
     # else:
     #     # If the agent made some number of moves that are actually valid in the environment
@@ -49,6 +49,7 @@ class GeneralWorker:
         # General instantiation
         self.necessary_context = None
         self.my_seed = None
+        self.cur_step = 1
         self.config = config
         self.env_type_string = base_env.main_config['env']['env_name'] if base_env.main_config else None
     
@@ -81,17 +82,14 @@ class GeneralWorker:
         
         obs, scores, dones, infos = self.env.step(actions)
         obs = self._process_obs(obs)
-        infos = self._process_infos(infos)
-        infos['observation_text'] = obs
-        for i, done in enumerate(dones):
-            # Sanity check: make sure that if the game is 'won' or 'lost', the done flag is set to True.
-            if infos['won'][i] or infos['lost'][i]:
-                assert done, "Game should be done if won or lost."
-        
-        return obs, scores, dones, infos
+        proc_infos = self._process_infos(infos)
+        proc_infos['observation_text'] = obs[0]
+        self.cur_step += 1
+        return obs, scores, dones, proc_infos
     
     def reset(self, seed):
         """Reset the environment"""
+        self.cur_step = 1
         self.my_seed = seed
         if self.env_type_string == "tales_alfworld":
             obs, infos = self.env.reset(game_file=seed)
@@ -100,7 +98,7 @@ class GeneralWorker:
 
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
-        infos['observation_text'] = obs
+        infos['observation_text'] = obs[0]
         return obs, infos
     
     def getobs(self):
@@ -110,19 +108,36 @@ class GeneralWorker:
     # Updated to allow env specific edits
     # ==========================
     def _process_infos(self, infos):
+        cleaned_infos = dict()
         if self.env_type_string and "textworld" in self.env_type_string:
             return infos
         elif self.env_type_string and "alfworld" in self.env_type_string:
-            infos['verbs'] = [ALFWORLD_VERBS]
-            infos['seed'] = self.my_seed
-            infos['necessary_context'] = self.necessary_context
-            return infos
+            infos = {k: v[0] for k, v in infos.items()}   # need to do this to match other envs
+            cleaned_infos['env_provided'] = infos
+            cleaned_infos['state_info'] = {
+                "verbs": ALFWORLD_VERBS,
+                "necessary_context": self.necessary_context
+            }
+            cleaned_infos['run_info'] = {
+                "seed": self.my_seed,
+                "proc_id": os.getpid(),
+                "step": self.cur_step
+            }
+            return cleaned_infos
         elif self.env_type_string and "scienceworld" in self.env_type_string:
             return infos
         elif self.env_type_string and "twx" in self.env_type_string:
-            infos['necessary_context'] = self.necessary_context
-            infos['seed'] = self.my_seed
-            return infos
+            cleaned_infos['env_provided'] = infos
+            cleaned_infos['state_info'] = {
+                "verbs": infos['verbs'],
+                "necessary_context": self.necessary_context
+            }
+            cleaned_infos['run_info'] = {
+                "seed": self.my_seed,
+                "proc_id": os.getpid(),
+                "step": self.cur_step
+            }
+            return cleaned_infos
         else:
             raise ValueError(f"Please add the env to this process_infos function (even if just identity).")
 
@@ -206,19 +221,11 @@ class GeneralEnvs(gym.Env):
 
         results = ray.get(futures)
         for i, (obs, scores, dones, info) in enumerate(results):
-            for k in info.keys():
-                if k == "extra.walkthrough" or k == 'verbs' or k == 'seed' or k == 'necessary_context':
-                    info[k] = str(info[k])
-                else:
-                    info[k] = info[k][0]
-
             text_obs_list.append(obs[0])
             dones_list.append(dones[0])
             info_list.append(info)
-
-            self.prev_admissible_commands[i] = info['admissible_commands']
+            self.prev_admissible_commands[i] = info['env_provided']['admissible_commands']
             rewards_list.append(compute_reward(info, dones[0]))
-
         return text_obs_list, rewards_list, dones_list, info_list
 
     def reset(self):
@@ -246,13 +253,8 @@ class GeneralEnvs(gym.Env):
         results = ray.get(futures)
         # print("Len of results from reset:", len(results))
         for i, (obs, info) in enumerate(results):
-            for k in info.keys():
-                if k == "extra.walkthrough" or k == 'verbs' or k == 'seed' or k == 'necessary_context':
-                    info[k] = str(info[k])
-                if isinstance(info[k], list):
-                    info[k] = info[k][0] 
             text_obs_list.append(obs[0])
-            self.prev_admissible_commands[i] = info['admissible_commands']
+            self.prev_admissible_commands[i] = info['env_provided']['admissible_commands']
             info_list.append(info)
 
         # self.ping_workers()

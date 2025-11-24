@@ -68,7 +68,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         if self.config['env']['reward_mode'] == 'zero-centered':
             rewards = [max(0, r) for r in rewards]
         elif self.config['env']['reward_mode'] == 'goal-only':
-            rewards = [r if r > 9 else 0 for r in rewards]
+            rewards = [r for r in rewards]
         elif self.config['env']['reward_mode'] == 'negative-test':
             if not self.ttp_switch:
                 rewards = [r if r < 0 else 0 for r in rewards]
@@ -155,7 +155,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
             else:
                 raise ValueError(f"Unknown prompt template: {self.config.env.prompt_template}")
 
-            necessary_context = NECESSARY_CONTEXT.format(necessary_context=info['necessary_context']) if info['necessary_context'] != "None" else ""
+            necessary_context = NECESSARY_CONTEXT.format(necessary_context=info['state_info']['necessary_context']) if info['state_info']['necessary_context'] != None else ""
             action_history = action_history.strip()
             action_history_special_token = '[ACTION_HISTORY_TOKEN]'
             
@@ -168,7 +168,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 current_step=len(self.buffers[i]) + 1,
                 current_observation=text_obs[i],
                 admissible_actions="",
-                verbs=info["verbs"],
+                verbs=info['state_info']["verbs"],
                 necessary_context=necessary_context
             )
             obs = self.limit_tokencount_obs(obs, action_history, action_history_special_token)
@@ -213,12 +213,12 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         for i in reversed(range(len(total_batch_list[batch_idx]))):
             batch_item = total_batch_list[batch_idx][i]
             if batch_item['active_masks']:
-                info = total_infos[batch_idx][i]
-                won_value = float(info['won'])
+                info = ast.literal_eval(total_infos[batch_idx][i])
+                won_value = float(info['env_provided']['won'])
                 success['success_rate'].append(won_value)
                 
                 # Process game file if it exists
-                gamefile = info.get("extra.gamefile")
+                gamefile = info['env_provided'].get("extra.gamefile")
                 if gamefile:
                     self._process_gamefile(gamefile, won_value, success)
                 return  # Exit after finding the first active mask
@@ -1156,11 +1156,7 @@ if __name__ == "__main__":
             for j in range(1):
                 # Train envs
                 obs, infos = envs.reset()
-                if env_name == 'tales_alfworld':
-                    gold_paths = [ast.literal_eval(inf["extra.walkthrough"])[0] for inf in infos]
-                elif env_name == 'tales_twx':
-                    gold_paths = [ast.literal_eval(inf["extra.walkthrough"]) for inf in infos]
-
+                gold_paths = [inf['env_provided']['extra.walkthrough'] for inf in infos]
 
                 # num_g_steps = 0
                 # for g in gold_paths:
@@ -1175,8 +1171,7 @@ if __name__ == "__main__":
                     if all(finished):
                         break  # all envs finished
 
-                    text_actions = [g[step] if step < len(g) else "env_done" for g in gold_paths]
-                    # print(text_actions)
+                    text_actions = [f"<action>{g[step]}</action>" if step < len(g) else "<action>env_done</action>" for g in gold_paths]
                     obs, rewards, dones, infos = envs.step(text_actions)
 
                     keep_mask = []
@@ -1210,5 +1205,5 @@ if __name__ == "__main__":
         print(f"[smoke] Done {env_name}")
 
     # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
-    for name in (["tales_alfworld", "tales_twx"]):
+    for name in (["tales_twx", "tales_alfworld"]):
         smoke(name)

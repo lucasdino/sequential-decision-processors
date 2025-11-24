@@ -281,6 +281,8 @@ class TrajectoryCollector:
             for data in total_batch_list[bs]:
                 assert traj_uid[bs] == data['traj_uid'], "data is not from the same trajectory"
                 if data['active_masks']:
+                    if 'run_info' not in data:
+                        raise KeyError("run_info missing from rollout data; ensure it is attached when collecting trajectories.")
                     # episode_rewards
                     data['episode_rewards'] = episode_rewards[bs]
                     data['episode_rewards_mean'] = episode_rewards_mean
@@ -470,8 +472,12 @@ class TrajectoryCollector:
             batch_list: list[dict] = to_list_of_dict(batch)
 
             for i in range(batch_size):
+                info = infos[i]
+                if 'run_info' not in info:
+                    raise KeyError("Expected 'run_info' in environment info but it was missing. Ensure env wrappers populate this field.")
+                batch_list[i]['run_info'] = info['run_info']
                 total_batch_list[i].append(batch_list[i])
-                total_infos[i].append(infos[i])
+                total_infos[i].append(info)
 
             # Update done states
             is_done = np.logical_or(is_done, dones)
