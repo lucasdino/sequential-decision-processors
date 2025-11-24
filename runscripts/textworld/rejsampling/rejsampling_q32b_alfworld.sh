@@ -47,6 +47,7 @@ model_path=$PROJ_DIR/models/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-32b-rejsampling-alfworld
 total_epochs=5
+# change train_steps -- this is the 'max' number of training steps we do. del line if we want to go based on epochs
 train_steps=5
 save_freq=-1
 test_freq=10
@@ -55,7 +56,7 @@ train_prompt_bsz=32
 val_prompt_bsz=32
 max_prompt_length=$((512 * 2))
 max_response_length=$((512 * 2))
-max_total_length=$((max_prompt_length + max_response_length))
+max_total_length=$((max_prompt_length+max_response_length))
 num_nodes=1
 micro_bs_per_gpu=$((32 / (num_nodes*8)))
 
