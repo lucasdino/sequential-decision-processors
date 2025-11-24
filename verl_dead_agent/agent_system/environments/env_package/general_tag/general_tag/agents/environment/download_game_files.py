@@ -59,7 +59,7 @@ TEXTWORLD_EXPRESS_TASKS = [
     (
         "CookingWorld",
         "cookingworld",
-        "numLocations=3, numIngredients=3, numDistractorItems=5, includeDoors=1, limitInventorySize=1",
+        "numLocations=3, numIngredients=3, numDistractorItems=5, includeDoors=0, limitInventorySize=0",
     ),
     # (
     #     "TextWorldCommonsense",
@@ -169,7 +169,7 @@ def prepare_alfworld_data(force=False):
     with zipfile.ZipFile(TALES_CACHE_ALFWORLD_DATA_ZIP, "r") as zip_ref:
         # Only extract the test folder
         for member in zip_ref.namelist():
-            if "valid_seen" in member or "valid_unseen" in member:
+            if "valid_seen" in member or "valid_unseen" in member or "train" in member:
                 zip_ref.extract(member, TALES_CACHE_ALFWORLD)
 
 

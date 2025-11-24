@@ -11,7 +11,7 @@ def general_projection(prompt, actions: List[str]) -> Tuple[List[str], List[int]
     - If no <action>, use the last 30 chars of the lowercased input and mark invalid.
     """
     n = len(actions)
-    parsed_actions  = [""] * n
+    parsed_actions  = ["Action not provided correctly. Ensure your action is in <action>...</action> tags and you don't think too long."] * n
     valids          = [0]  * n
     parsed_thinking = ["Invalid thinking trace: remember to enclose thinking traces in <think>...</think> tags."] * n
 
@@ -21,8 +21,8 @@ def general_projection(prompt, actions: List[str]) -> Tuple[List[str], List[int]
         if am:
             parsed_actions[i] = am[-1].group(1).strip()  # keep original casing/content
             valids[i] = 1
-        else:
-            parsed_actions[i] = generation.lower()[-125:]
+        # else:
+        #     parsed_actions[i] = generation.lower()[-125:]
 
         # last <think>…</think> must exist (case-sensitive)
         tm = list(THINK_RE.finditer(generation))

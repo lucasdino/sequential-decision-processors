@@ -29,7 +29,7 @@ DATA_DIR=$PROJ_DIR/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=$DATA_DIR/text/train.parquet
 VAL_PARQUET=$DATA_DIR/text/test.parquet
-REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
+REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/twx
 
 
 
@@ -39,7 +39,7 @@ REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
 env_seed=10
 env_name=tales_twx
 # env_name can be 'tales_alfworld' or 'tales_twx'
-env_max_steps=50
+env_max_steps=30
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 model_path=$PROJ_DIR/models/Qwen3-32B
@@ -53,7 +53,7 @@ test_freq=10
 num_cpus_per_env_worker=0.1
 train_prompt_bsz=32
 val_prompt_bsz=32
-max_prompt_length=$((512 * 5))
+max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 3))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1

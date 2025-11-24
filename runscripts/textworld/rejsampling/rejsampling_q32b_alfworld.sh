@@ -39,7 +39,7 @@ REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
 env_seed=10
 env_name=tales_alfworld
 # env_name can be 'tales_alfworld' or 'tales_twx'
-env_max_steps=50
+env_max_steps=20
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 model_path=$PROJ_DIR/models/Qwen3-32B
@@ -53,7 +53,7 @@ test_freq=10
 num_cpus_per_env_worker=0.1
 train_prompt_bsz=32
 val_prompt_bsz=32
-max_prompt_length=$((512 * 5))
+max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 3))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
