@@ -1162,6 +1162,16 @@ class RayPPOTrainer:
                             inputs = self.tokenizer.batch_decode(batch.batch["prompts"], skip_special_tokens=True)
                             outputs = self.tokenizer.batch_decode(batch.batch["responses"], skip_special_tokens=True)
                             scores = batch.batch["token_level_scores"].sum(-1).cpu().tolist()
+                            
+                            # Adding our custom info we want to store too'
+                            # Attach per-step env metadata so _dump_generations can write it (len must match n)
+                            env_infos = batch.non_tensor_batch.get("step_info", None)
+                            run_infos = batch.non_tensor_batch.get("run_info", None)
+                            if env_infos is not None and len(env_infos) == len(inputs):
+                                reward_extra_infos_dict["env_info"] = env_infos.tolist() if hasattr(env_infos, "tolist") else list(env_infos)
+                            if run_infos is not None and len(run_infos) == len(inputs):
+                                reward_extra_infos_dict["run_info"] = run_infos.tolist() if hasattr(run_infos, "tolist") else list(run_infos)
+
                             self._dump_generations(
                                 inputs=inputs,
                                 outputs=outputs,

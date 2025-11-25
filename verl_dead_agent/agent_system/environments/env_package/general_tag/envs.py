@@ -7,7 +7,7 @@ import torch
 import ray
 
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
-from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs, get_necessary_context
+from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs, parse_alfworld_task, parse_ingredients, get_necessary_context
 
 ALFWORLD_VERBS = ['go to', 'open', 'close', 'take _ from _', 'move _ to _', 'use', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'inventory', 'look', 'examine']
 
@@ -47,17 +47,18 @@ class GeneralWorker:
             self.env = base_env.init_env()  
         
         # General instantiation
-        self.necessary_context = None
+        self.necessary_context = dict()
         self.my_seed = None
         self.cur_step = 1
+        self.last_action_str = "[RESET]"
         self.config = config
         self.env_type_string = base_env.main_config['env']['env_name'] if base_env.main_config else None
     
     def step(self, action):
         """Execute a step in the environment"""
-        if len(action) > 100:
-            print("Action too long, truncated to 100 chars: ", action)
-            action = action[:100]
+        if len(action) > 150:
+            # print("Action too long, truncated to 100 chars: ", action)
+            action = action[:150]
         elif 'restart' in action:
             action = action.replace("restart", "")
         elif 'exit' in action:
@@ -78,19 +79,21 @@ class GeneralWorker:
             print("Encoded error tripped, original action: ", action)
             action = action.encode('latin-1')
 
+        self.last_action_str = action
         actions = [action] 
         
         obs, scores, dones, infos = self.env.step(actions)
         obs = self._process_obs(obs)
-        proc_infos = self._process_infos(infos)
-        proc_infos['observation_text'] = obs[0]
+        infos = self._process_infos(infos)
+        infos['step_info']['obs'] = obs[0]
         self.cur_step += 1
-        return obs, scores, dones, proc_infos
+        return obs, scores, dones, infos
     
     def reset(self, seed):
         """Reset the environment"""
         self.cur_step = 1
         self.my_seed = seed
+        self.necessary_context = dict()
         if self.env_type_string == "tales_alfworld":
             obs, infos = self.env.reset(game_file=seed)
         else:
@@ -98,7 +101,7 @@ class GeneralWorker:
 
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
-        infos['observation_text'] = obs[0]
+        infos['step_info']['obs'] = obs[0]
         return obs, infos
     
     def getobs(self):
@@ -116,12 +119,15 @@ class GeneralWorker:
             cleaned_infos['env_provided'] = infos
             cleaned_infos['state_info'] = {
                 "verbs": ALFWORLD_VERBS,
-                "necessary_context": self.necessary_context
+                "necessary_context": get_necessary_context(self.necessary_context)
             }
             cleaned_infos['run_info'] = {
                 "seed": self.my_seed,
                 "proc_id": os.getpid(),
                 "step": self.cur_step
+            }
+            cleaned_infos['step_info'] = {
+                "action": self.last_action_str,
             }
             return cleaned_infos
         elif self.env_type_string and "scienceworld" in self.env_type_string:
@@ -130,12 +136,15 @@ class GeneralWorker:
             cleaned_infos['env_provided'] = infos
             cleaned_infos['state_info'] = {
                 "verbs": infos['verbs'],
-                "necessary_context": self.necessary_context
+                "necessary_context": get_necessary_context(self.necessary_context)
             }
             cleaned_infos['run_info'] = {
                 "seed": self.my_seed,
                 "proc_id": os.getpid(),
                 "step": self.cur_step
+            }
+            cleaned_infos['step_info'] = {
+                "action": self.last_action_str,
             }
             return cleaned_infos
         else:
@@ -145,20 +154,30 @@ class GeneralWorker:
         """ Functionality for env specific observation processing """
         if self.env_type_string and "textworld" in self.env_type_string:
             obs = clean_cookingworld_obs(obs[0])
-            ctx = get_necessary_context(obs)
-            self.necessary_context = ctx if ctx else self.necessary_context
+            self._update_necessary_context(obs)
             return (obs,)
         elif self.env_type_string and "alfworld" in self.env_type_string:
+            self._update_necessary_context(obs[0])
             return (clean_alfworld_obs(obs[0]),)
         elif self.env_type_string and "scienceworld" in self.env_type_string:
             return obs
         elif self.env_type_string and "twx" in self.env_type_string:
             obs = clean_cookingworld_obs(obs[0])
-            ctx = get_necessary_context(obs)
-            self.necessary_context = ctx if ctx else self.necessary_context
+            self._update_necessary_context(obs)
             return (obs,)
         else:
             raise ValueError(f"Please add the env to this process_obs function (even if just identity).")
+
+    # Necessary Context Managers
+    def _update_necessary_context(self, obs):
+        if "recipe" not in self.necessary_context and "twx" in self.env_type_string:
+            ctx = parse_ingredients(obs)
+            if ctx:
+                self.necessary_context['recipe'] = ctx
+        if "alfworld_task" not in self.necessary_context and "alfworld" in self.env_type_string:
+            ctx = parse_alfworld_task(obs)
+            if ctx:
+                self.necessary_context['alfworld_task'] = ctx
 
     # For testing ray processes
     def ping(self):

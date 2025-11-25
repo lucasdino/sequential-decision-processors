@@ -281,8 +281,8 @@ class TrajectoryCollector:
             for data in total_batch_list[bs]:
                 assert traj_uid[bs] == data['traj_uid'], "data is not from the same trajectory"
                 if data['active_masks']:
-                    if 'run_info' not in data:
-                        raise KeyError("run_info missing from rollout data; ensure it is attached when collecting trajectories.")
+                    if 'run_info' not in data or 'step_info' not in data:
+                        raise KeyError("run_info and/or step_info missing from rollout data; ensure it is attached when collecting trajectories.")
                     # episode_rewards
                     data['episode_rewards'] = episode_rewards[bs]
                     data['episode_rewards_mean'] = episode_rewards_mean
@@ -371,6 +371,7 @@ class TrajectoryCollector:
         # Trajectory collection loop
         timing_raw = {}
         for _step in range(self.config.env.max_steps):
+            step_start_time = time.perf_counter()
             active_masks = np.logical_not(is_done)
 
             batch = self.preprocess_batch(gen_batch=gen_batch, obs=obs)
@@ -455,10 +456,19 @@ class TrajectoryCollector:
                 # dones is numpy, delete a dimension
                 dones = dones.squeeze(1)
 
+            dones = torch_to_numpy(dones).astype(bool)
+
             if 'is_action_valid' in infos[0]:
                 batch.non_tensor_batch['is_action_valid'] = np.array([info['is_action_valid'] for info in infos], dtype=bool)
             else:
                 batch.non_tensor_batch['is_action_valid'] = np.ones(batch_size, dtype=bool)
+
+            valid_action_count = int(np.count_nonzero(batch.non_tensor_batch['is_action_valid']))
+            done_env_count = int(np.count_nonzero(dones))
+            step_elapsed = time.perf_counter() - step_start_time
+            print(
+                f"[rollout] step {_step + 1}: {step_elapsed:.1f}s | valid_actions {valid_action_count}/{batch_size} | done_envs {done_env_count}/{batch_size}"
+            )
 
             # Create reward tensor, only assign rewards for active environments
             episode_rewards += torch_to_numpy(rewards) * torch_to_numpy(active_masks)
@@ -473,9 +483,10 @@ class TrajectoryCollector:
 
             for i in range(batch_size):
                 info = infos[i]
-                if 'run_info' not in info:
-                    raise KeyError("Expected 'run_info' in environment info but it was missing. Ensure env wrappers populate this field.")
+                if 'run_info' not in info or 'step_info' not in info:
+                    raise KeyError("Expected 'run_info' and/or 'step_info' in environment info but it was missing. Ensure env wrappers populate this field.")
                 batch_list[i]['run_info'] = info['run_info']
+                batch_list[i]['step_info'] = info['step_info']
                 total_batch_list[i].append(batch_list[i])
                 total_infos[i].append(info)
 

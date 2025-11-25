@@ -117,11 +117,31 @@ def clean_alfworld_obs(text: str) -> str:
     cleaned = cleaned.strip("\n")                  # Remove trailing newlines
     return cleaned
 
-def get_necessary_context(text: str) -> str:
+# =======================
+# Context Managers
+# =======================
+
+NECESSARY_CONTEXT = "\nYou have gathered the following helpful information through previous actions:\n{necessary_context}"
+RE_ALFWORLDTASK = re.compile(r"Your task is to:\s*(.*?\.)", re.DOTALL)
+
+def parse_ingredients(text: str) -> str:
     context_trigger = "Gather all following ingredients and follow the directions to prepare this tasty meal."
     ctx = None
     if context_trigger in text:
         s = text.split(context_trigger, 1)[1].replace("\r", "")
         ctx = s.rstrip("\n").lstrip("\n")
-        ctx = f"Your recipe is:\n{ctx}"
+        ctx = f"Your recipe is: {ctx}."
     return ctx
+
+def parse_alfworld_task(text: str) -> str:
+    m = RE_ALFWORLDTASK.search(text)
+    ctx = None
+    if m:
+        task = m.group(1).strip()
+        ctx = f"Your task is: {task}"
+    return ctx
+
+def get_necessary_context(necessary_context_list):
+    if len(necessary_context_list) == 0:
+        return ""
+    return NECESSARY_CONTEXT.format(necessary_context="\n\n".join(necessary_context_list.values()))

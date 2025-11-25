@@ -43,8 +43,17 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
             self.tok = AutoTokenizer.from_pretrained(tok_path, use_fast=True, local_files_only=True)
         else:
             self.tok = None
+        self._get_task_spec_info()
         super().__init__(envs, projection_f, env_name)
     
+    def _get_task_spec_info(self):
+        if self.env_name == "twx":
+            self.task_spec_info = TWX_SPEC_INSTRUCTIONS
+        elif self.env_name == "alfworld":
+            self.task_spec_info = ALFWORLD_SPEC_INSTRUCTIONS
+        else:
+            self.task_spec_info = ""
+
     # Stripped down general manager to handle all of the frameworks from TALES
     def reset(self):
         obs, infos = self.envs.reset()
@@ -85,7 +94,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
 
         # add action_valid to infos
         for i, info in enumerate(infos):
-            info['is_action_valid'] = to_numpy(valids[i])
+            info['is_action_valid'] = valids[i]
 
         next_observations = {'text': self.build_text_obs(next_obs, infos=infos), 
                              'image': None, 
@@ -155,7 +164,6 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
             else:
                 raise ValueError(f"Unknown prompt template: {self.config.env.prompt_template}")
 
-            necessary_context = NECESSARY_CONTEXT.format(necessary_context=info['state_info']['necessary_context']) if info['state_info']['necessary_context'] != None else ""
             action_history = action_history.strip()
             action_history_special_token = '[ACTION_HISTORY_TOKEN]'
             
@@ -169,7 +177,8 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 current_observation=text_obs[i],
                 admissible_actions="",
                 verbs=info['state_info']["verbs"],
-                necessary_context=necessary_context
+                necessary_context=info['state_info']['necessary_context'],
+                task_spec_info=self.task_spec_info
             )
             obs = self.limit_tokencount_obs(obs, action_history, action_history_special_token)
             postprocess_text_obs.append(obs)
@@ -213,7 +222,10 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         for i in reversed(range(len(total_batch_list[batch_idx]))):
             batch_item = total_batch_list[batch_idx][i]
             if batch_item['active_masks']:
-                info = ast.literal_eval(total_infos[batch_idx][i])
+                if isinstance(total_infos[batch_idx][i], Dict):
+                    info = total_infos[batch_idx][i]
+                else:
+                    info = ast.literal_eval(total_infos[batch_idx][i])
                 won_value = float(info['env_provided']['won'])
                 success['success_rate'].append(won_value)
                 

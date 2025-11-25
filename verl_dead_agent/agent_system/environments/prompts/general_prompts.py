@@ -1,12 +1,13 @@
 REFINEMENT_PROMPT = "Placeholdr"
 
-NECESSARY_CONTEXT = "\nYou have gathered the following helpful information through previous actions: {necessary_context}."
+ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it."
+TWX_SPEC_INSTRUCTIONS = ""
 
 GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an expert agent operating in an interactive-fiction, text-world environment. Your task will be provided to you in your first observation.
 When you are ready to take an action, you should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. 
 Once you've finished your reasoning, you must output your action given the current situation enclosed within <action> </action> tags.
 For example, <action>take lantern</action>.
-You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.
+You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.{task_spec_info}
 The set of current actionable verbs are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent observations and actions you took: 
@@ -18,7 +19,7 @@ GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT = """You are an expert agent operating i
 When you are ready to take an action, you should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. 
 Once you've finished your reasoning, you must output your action given the current situation enclosed within <action> </action> tags.
 For example, <action>take lantern</action>.
-You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.
+You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.{task_spec_info}
 The set of current actionable verbs are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{necessary_context}
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent observations and actions you took: 
