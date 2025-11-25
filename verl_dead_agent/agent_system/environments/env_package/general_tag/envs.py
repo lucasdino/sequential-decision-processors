@@ -7,10 +7,10 @@ import torch
 import ray
 
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
-from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import clean_cookingworld_obs, clean_alfworld_obs, parse_alfworld_task, parse_ingredients, get_necessary_context
+from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import *
 
-ALFWORLD_VERBS = ['go to', 'open', 'close', 'take _ from _', 'move _ to _', 'use', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'inventory', 'look', 'examine']
-
+ALFWORLD_VERBS = ['go to _', 'open _', 'close _', 'take _ from _', 'move _ to _', 'use _', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'examine _', 'inventory']
+TRIVIAL_ENV_OBS = ["Nothing happens.", "Unknown action: I'm not sure what you mean."]
 
 def load_config_file(path):
     print(path)
@@ -86,6 +86,7 @@ class GeneralWorker:
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
         infos['step_info']['obs'] = obs[0]
+        infos['step_info']['legal_move'] = sum([m in obs[0] for m in TRIVIAL_ENV_OBS]) == 0.0
         self.cur_step += 1
         return obs, scores, dones, infos
     
@@ -102,6 +103,7 @@ class GeneralWorker:
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
         infos['step_info']['obs'] = obs[0]
+        infos['step_info']['legal_move'] = 0
         return obs, infos
     
     def getobs(self):
@@ -119,7 +121,7 @@ class GeneralWorker:
             cleaned_infos['env_provided'] = infos
             cleaned_infos['state_info'] = {
                 "verbs": ALFWORLD_VERBS,
-                "necessary_context": get_necessary_context(self.necessary_context)
+                "necessary_context": get_necessary_context(self.necessary_context),
             }
             cleaned_infos['run_info'] = {
                 "seed": self.my_seed,
@@ -127,7 +129,7 @@ class GeneralWorker:
                 "step": self.cur_step
             }
             cleaned_infos['step_info'] = {
-                "action": self.last_action_str,
+                "action": self.last_action_str
             }
             return cleaned_infos
         elif self.env_type_string and "scienceworld" in self.env_type_string:
@@ -136,7 +138,7 @@ class GeneralWorker:
             cleaned_infos['env_provided'] = infos
             cleaned_infos['state_info'] = {
                 "verbs": infos['verbs'],
-                "necessary_context": get_necessary_context(self.necessary_context)
+                "necessary_context": get_necessary_context(self.necessary_context),
             }
             cleaned_infos['run_info'] = {
                 "seed": self.my_seed,
@@ -144,7 +146,7 @@ class GeneralWorker:
                 "step": self.cur_step
             }
             cleaned_infos['step_info'] = {
-                "action": self.last_action_str,
+                "action": self.last_action_str
             }
             return cleaned_infos
         else:

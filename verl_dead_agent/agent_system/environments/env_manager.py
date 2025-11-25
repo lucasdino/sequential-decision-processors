@@ -105,48 +105,62 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
 
         return next_observations, rewards, dones, infos
         
-
-    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 5) -> List[str]:
+    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 10) -> List[str]:
         """
         This function builds the text observation for the agent.
         """
+        TRIVIAL_ENV_OBS = ["Nothing happens.", "Unknown action: I'm not sure what you mean."]
         postprocess_text_obs = []
-        for i in range(len(text_obs)):
+
+        for env_idx in range(len(text_obs)):
+            info = infos[env_idx]
+            recent_history = self.buffers[env_idx]
+            
             # Get last `history_length` steps
-            info = infos[i]
-            recent_history = self.buffers[i][-history_length:]
-            valid_history_length = len(recent_history)
-            start_index = len(self.buffers[i]) - valid_history_length
-            action_history = ""
-            action_history_with_think_arr = []
-            for j, record in enumerate(recent_history):
-                step_number = start_index + j + 1
-                action = record["action"]
-                env_obs = record["text_obs"]
-                if "thinking_trace" in record.keys():
-                    thinking_trace = record["thinking_trace"]
+            obs_arr, actions_arr, thoughts_arr = [], [], []
+            num_successful_obs = 0
+            for hist_idx in reversed(range(len(recent_history))):  # Loop backward
+                if num_successful_obs == history_length:
+                    break   # Reached our desired length
+                record = recent_history[hist_idx]
+                step_num = hist_idx + 1
+                obs_arr.append((step_num, record["text_obs"]))
+                actions_arr.append((step_num, record["action"]))
+                thoughts_arr.append((step_num, record["thinking_trace"] if "thinking_trace" in record.keys() else "[ERROR] Invalid / no thinking trace provided."))
+                if sum([q in record["text_obs"] for q in TRIVIAL_ENV_OBS]) == 0:
+                    num_successful_obs += 1
+
+            # Reverse to get in correct order
+            obs_arr.reverse(); actions_arr.reverse(); thoughts_arr.reverse()
+
+            # Now need to filter out the trivial obs
+            nontrivial_mask = []
+            for obs in obs_arr:
+                if sum([q in obs for q in TRIVIAL_ENV_OBS]) > 0:
+                    nontrivial_mask.append(0)
                 else:
-                    thinking_trace = "None or invalid thinking trace."
-                action_history += f"\n[Observation {step_number}: '{env_obs}', Action {step_number}: '{action}']"
-                action_history_with_think_arr.append(f"\n[Observation {step_number}: '{env_obs}', Thoughts {step_number}: '{thinking_trace}' Action {step_number}: '{action}']")
-            action_history_with_think = "".join(action_history_with_think_arr)
+                    nontrivial_mask.append(1)
+            nontrivial_acts_thoughts_mask = nontrivial_mask[1:] + [1]  # Need the thoughts / actions that led to the nontrivial observation (hence offset). Also keeping most prev thought/action
 
-            # Check the token length
-            attempts = 0
-            if self.tok is not None:
-                token_length = len(self.tok.encode(action_history_with_think))
-                # If the token length is too long, we need to truncate the history (1000 is just for an extra safety margin)
-                while token_length >= (self.config['actor_rollout_ref']['actor']['ppo_max_token_len_per_gpu'] - 1000):
-                    action_history_with_think_arr.pop(0)
-                    action_history_with_think = "".join(action_history_with_think_arr)
-                    token_length = len(self.tok.encode(action_history_with_think))
-                    attempts += 1
-                    # If attempts go above 4/5 of the max steps, just default to the regular action history.
-                    if attempts > (self.config['env']['max_steps'] * 0.8):
-                        print(f"Warning: Too many attempts to truncate the action history for {self.env_name}. Defaulting to regular action history.")
-                        action_history_with_think = action_history
-                        break
+            # Now filter
+            obs_arr = [obs for obs, m in zip(obs_arr, nontrivial_mask) if m][-history_length:]
+            actions_arr = [acts for acts, m in zip(actions_arr, nontrivial_acts_thoughts_mask) if m][-history_length:]
+            thoughts_arr = [thts for thts, m in zip(thoughts_arr, nontrivial_acts_thoughts_mask) if m][-history_length:]
 
+            # Now convert to text
+            state_action_history = ""
+            for step_idx in range(len(obs_arr)):
+                step_num_obs, obs = obs_arr[step_idx]
+                step_num_act, act = actions_arr[step_idx]
+                state_action_history += f"[Observation {step_num_obs}: '{obs}']\n"
+                if step_idx < len(obs_arr) - 1:
+                    state_action_history += f"[Action {step_num_act}: '{act}']\n"
+                else:
+                    state_action_history += f"\nYour latest action (step {step_num_act}) was: '{act}'"
+
+            action_history_special_token = '[ACTION_HISTORY_TOKEN]'
+
+            # Pull our prompt template
             if self.config['env']['prompt_template'] == "basecase":
                 GENERAL_TEMPLATE = general_INST_FIRST
             elif self.config['env']['prompt_template'] == 'base_with_verbs':   
@@ -163,24 +177,25 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 GENERAL_TEMPLATE = general_SCRTQ_INST_FIRST_WITH_THINK_EXTENDED
             else:
                 raise ValueError(f"Unknown prompt template: {self.config.env.prompt_template}")
-
-            action_history = action_history.strip()
-            action_history_special_token = '[ACTION_HISTORY_TOKEN]'
             
+            env_name = "AlfWorld" if self.env_name == "alfworld" else "CookingWorld"
+
             obs = GENERAL_TEMPLATE.format(
                 task_description=[],
-                step_count=len(self.buffers[i]),
-                history_length=valid_history_length,
+                env_name=env_name,
+                step_count=len(recent_history),
+                history_length=len(obs_arr),
                 action_history=action_history_special_token,
-                action_history_with_think=action_history_with_think.strip(),
-                current_step=len(self.buffers[i]) + 1,
-                current_observation=text_obs[i],
+                action_history_with_think=action_history_special_token,
+                current_step=len(recent_history) + 1,
+                current_observation=text_obs[env_idx],
                 admissible_actions="",
                 verbs=info['state_info']["verbs"],
                 necessary_context=info['state_info']['necessary_context'],
+                cur_observation=info['step_info']['obs'],
                 task_spec_info=self.task_spec_info
             )
-            obs = self.limit_tokencount_obs(obs, action_history, action_history_special_token)
+            obs = self.limit_tokencount_obs(obs, state_action_history, action_history_special_token)
             postprocess_text_obs.append(obs)
 
         return postprocess_text_obs
@@ -196,7 +211,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
         assert self.tok is not None
 
         max_prompt_len = self.config["data"]["max_prompt_length"]
-        margin = 128
+        margin = 32
         obs_token_ids = self.tok.encode(obs, add_special_tokens=False)
         obs_len = len(obs_token_ids)
         max_history_tokens = max_prompt_len - margin - obs_len
@@ -209,9 +224,14 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
             else:
                 truncated_ids = history_ids[-max_history_tokens:]
             truncated_history = self.tok.decode(truncated_ids, skip_special_tokens=False)
+        
+        # Find first instance of '[ bservation #' in truncated_history and trim all text prior to it
+        idx = truncated_history.find("[Observation ")
+        if idx != -1:
+            truncated_history = truncated_history[idx:]
         new_obs = obs.replace(action_history_special_token, truncated_history, 1)
+        
         return new_obs
-
 
     def save_to_history_buffer(self, text_obs, actions, thinking_trace):
         for i in range(len(actions)):
@@ -1082,17 +1102,19 @@ if __name__ == "__main__":
         return OmegaConf.create({
             "env": {
                 "env_name": env_name,         # e.g., 'tales_alfworld' or 'tales_scienceworld'
-                "seed": 1234,
+                "seed": 42,
                 "rollout": {"n": 1},          # group_n = 1
                 "prompt_template": "base_with_verbs_context", # used by general manager + projection
                 "reward_mode": "goal-only",
-                "max_steps": 20,
-                "tokenizer": "qwen25"
+                "max_steps": 50,
+                "tokenizer": "qwen25",
+                "valid_seen": True,
+                "load_env_seeds": True
             },
             "data": {
-                "train_batch_size": 8,        # instantiate a couple envs
+                "train_batch_size": 4,        # instantiate a couple envs
                 "val_batch_size": 4,
-                "max_prompt_length": 512*3
+                "max_prompt_length": 512*2
             },
             "actor_rollout_ref": {
                 "model": {"path": "models/bert-case"},     # lightweight tokenizer
@@ -1167,8 +1189,23 @@ if __name__ == "__main__":
         try:
             for j in range(1):
                 # Train envs
+                import random
                 obs, infos = envs.reset()
                 gold_paths = [inf['env_provided']['extra.walkthrough'] for inf in infos]
+
+                for g_idx, g in enumerate(gold_paths):
+                    new_g = []
+                    seen_g = 0
+                    attempt_g = 0
+                    while seen_g < len(g):
+                        attempt_g += 1
+                        if random.random() > 0.1:
+                            new_g.append(g[seen_g])
+                            seen_g += 1
+                        else:
+                            new_g.append(f"inventory")   # Doing this to ensure the model learns to use inventory call thru synth data
+                    gold_paths[g_idx] = new_g
+
 
                 # num_g_steps = 0
                 # for g in gold_paths:
@@ -1179,7 +1216,7 @@ if __name__ == "__main__":
                 finished = [False] * num_envs
                 
                 start_step = 1 if env_name == "tales_twx" else 0
-                for step in range(start_step, 30):
+                for step in range(start_step, 50):
                     if all(finished):
                         break  # all envs finished
 
@@ -1217,5 +1254,5 @@ if __name__ == "__main__":
         print(f"[smoke] Done {env_name}")
 
     # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
-    for name in (["tales_twx", "tales_alfworld"]):
+    for name in (["tales_alfworld", "tales_twx"]):
         smoke(name)

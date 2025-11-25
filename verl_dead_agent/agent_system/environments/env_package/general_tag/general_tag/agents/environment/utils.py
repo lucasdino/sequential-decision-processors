@@ -94,6 +94,9 @@ def download(url, dst, desc=None, force=False):
 # =======================================
 # Helper functions for processing / cleaning obs and data
 # =======================================
+RE_TW_HEADER = re.compile(r"^\s*-=.*=-\s*$")
+RE_TW_TASK   = re.compile(r"^\s*Your task is to:.*$")
+
 def clean_cookingworld_obs(text: str) -> str:
     """
     Simple function to clean / trim the observation
@@ -117,11 +120,28 @@ def clean_alfworld_obs(text: str) -> str:
     cleaned = cleaned.strip("\n")                  # Remove trailing newlines
     return cleaned
 
+def clean_alfworld_obs_notask(text: str) -> str:
+    # Normalize newlines
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = text.split("\n")
+
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if RE_TW_HEADER.match(stripped):
+            continue
+        if RE_TW_TASK.match(stripped):
+            continue
+        cleaned_lines.append(line)
+
+    # Remove leading/trailing blank lines (newlines)
+    return "\n".join(cleaned_lines).strip("\n")
+
 # =======================
 # Context Managers
 # =======================
 
-NECESSARY_CONTEXT = "\nYou have gathered the following helpful information through previous actions:\n{necessary_context}"
+NECESSARY_CONTEXT = "\n\nYou have gathered the following helpful information through previous actions:\n{necessary_context}"
 RE_ALFWORLDTASK = re.compile(r"Your task is to:\s*(.*?\.)", re.DOTALL)
 
 def parse_ingredients(text: str) -> str:

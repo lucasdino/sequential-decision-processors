@@ -5,7 +5,7 @@ import numpy as np
 from .download_game_files import get_seeds_twx, TEXTWORLD_EXPRESS_TASKS
 
 
-COOKINGWORLD_VERBS = ["chop _ with _", "cook _ with _", "dice _ with _", "drop", "eat meal", "examine", "go", "inventory", "open", "prepare meal", "slice _ with _", "take", "take _ from _"]
+COOKINGWORLD_VERBS = ["chop _ with _", "cook _ with _", "dice _ with _", "drop _", "examine _", "go _", "open _", "slice _ with _", "take _", "take _ from _", "prepare meal", "eat meal", "look around", "inventory"]
 
 # Base twx class, taken from TALES.
 class TextWorldExpressEnv(gym.Env):
@@ -43,6 +43,7 @@ class TextWorldExpressEnv(gym.Env):
         return (obs,), info
 
     def step(self, action):
+        act = "look around" if action[0] == "look" else action[0]        
         obs, reward, done, info = self.env.step(action[0])
         info["max_score"] = 100
         info["feedback"] = obs

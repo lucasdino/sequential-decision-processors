@@ -11,16 +11,16 @@ def general_projection(prompt, actions: List[str]) -> Tuple[List[str], List[int]
     - If no <action>, use the last 30 chars of the lowercased input and mark invalid.
     """
     n = len(actions)
-    parsed_actions  = ["[ERROR] Action not provided correctly. Ensure your action is in <action>...</action> tags and you don't think too long."] * n
+    parsed_actions  = ["[ERROR] Action unabled to be parsed."] * n
     valids          = [0]  * n
-    parsed_thinking = ["[ERROR] Invalid thinking trace: remember to enclose thinking traces in <think>...</think> tags."] * n
+    parsed_thinking = ["[ERROR] Thinking trace unable to be parsed."] * n
 
     for i, generation in enumerate(actions):
         # last <action>…</action>
         am = list(ACTION_RE.finditer(generation))
         if am:
             if len(am[-1].group(1)) > 150:
-                parsed_actions[i] = "[ERROR] Action provided was too long. You must return just your chosen action within answer tags."
+                parsed_actions[i] = "[ERROR] Parsed action was too long (>150 chars)."
             else:
                 parsed_actions[i] = am[-1].group(1).strip()  # keep original casing/content
                 valids[i] = 1

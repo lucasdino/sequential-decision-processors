@@ -1,5 +1,6 @@
-import glob
 import os
+import glob
+import random
 from .download_game_files import prepare_alfworld_data, prepare_twcooking_data
 from os.path import join as pjoin
 from .download_game_files import TASK_TYPES, TALES_CACHE_ALFWORLD_VALID_SEEN, TALES_CACHE_ALFWORLD_VALID_UNSEEN, TALES_CACHE_ALFWORLD_TRAIN, TALES_CACHE_TWCOOKING_TEST, TALES_CACHE_TWCOOKING_TRAIN

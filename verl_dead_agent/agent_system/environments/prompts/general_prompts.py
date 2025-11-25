@@ -1,31 +1,29 @@
 REFINEMENT_PROMPT = "Placeholdr"
 
-ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it."
-TWX_SPEC_INSTRUCTIONS = ""
+ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it. You can use 'inventory' to get your current inventory."
+TWX_SPEC_INSTRUCTIONS = "\nYou can use 'look around' or 'inventory' to get your current observation and current inventory, respectively."
 
-GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an expert agent operating in an interactive-fiction, text-world environment. Your task will be provided to you in your first observation.
-When you are ready to take an action, you should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. 
-Once you've finished your reasoning, you must output your action given the current situation enclosed within <action> </action> tags.
-For example, <action>take lantern</action>.
-You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.{task_spec_info}
-The set of current actionable verbs are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.
+GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an agent operating in {env_name}, an interactive-fiction, text-world environment.
+You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
+If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
+For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{cur_observation}
 
-Prior to this step, you have already taken {step_count} step(s). Below are the most recent observations and actions you took: 
+Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
 
-You are now at step {current_step} and your current observation is: {current_observation}."""
+You are now at step {current_step} and your latest observation is: {current_observation}"""
 
-GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT = """You are an expert agent operating in an interactive-fiction, text-world environment. Your task will be provided to you in your first observation.
-When you are ready to take an action, you should first reason step-by-step about the current situation. This reasoning process MUST be enclosed within <think> </think> tags. 
-Once you've finished your reasoning, you must output your action given the current situation enclosed within <action> </action> tags.
-For example, <action>take lantern</action>.
-You are only allowed to produce one action at a time. If you do not enclose your single action within answer tags, your response will be rejected.{task_spec_info}
-The set of current actionable verbs are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{necessary_context}
+GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT = """You are an agent operating in {env_name}, an interactive-fiction, text-world environment.
+You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
+If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
+For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{necessary_context}{cur_observation}
 
-Prior to this step, you have already taken {step_count} step(s). Below are the most recent observations and actions you took: 
+Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
 
-You are now at step {current_step} and your current observation is: {current_observation}."""
+You are now at step {current_step} and your latest observation is: {current_observation}"""
 
 general_INST_FIRST = """
 You are an expert agent operating in an interactive-fiction, text-world environment. Your task will be provided to you in your first observation.
