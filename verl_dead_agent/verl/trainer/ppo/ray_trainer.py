@@ -1172,6 +1172,14 @@ class RayPPOTrainer:
                             if run_infos is not None and len(run_infos) == len(inputs):
                                 reward_extra_infos_dict["run_info"] = run_infos.tolist() if hasattr(run_infos, "tolist") else list(run_infos)
 
+                            # TODO
+                            # in env_infos there is a key associated with 'legal_move'
+                            # Compute the % legal moves and I want to log that in my metrics
+                            # Let's also log in the timing raw in the metrics as well
+                            # Let's also count the number of 'rewards' that are == 1 -- these are successes
+                            # So we should after each full rollout we should log the % legal moves, % env successes
+
+
                             self._dump_generations(
                                 inputs=inputs,
                                 outputs=outputs,
@@ -1182,8 +1190,11 @@ class RayPPOTrainer:
                         
                         # Log basic metrics
                         metrics.update({
-                            "training/global_step": self.global_steps,
-                            "training/epoch": epoch,
+                            "rej_sampling/percent_legal": 0,
+                            "rej_sampling/percent_env_success": 0,
+                            "rej_sampling/time_per_step": 0,
+                            "rej_sampling/global_step": self.global_steps,
+                            "rej_sampling/epoch": epoch,
                         })
                         
                         logger.log(data=metrics, step=self.global_steps)
@@ -1197,7 +1208,7 @@ class RayPPOTrainer:
                         
                         continue  # Skip all training computations below (no backprop!)
                     # -------- [END] Updated by Lucas 11/10 --------
-                                
+                           
                     if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
                         with _timer("gen_max", timing_raw):
                             gen_baseline_batch = deepcopy(gen_batch)

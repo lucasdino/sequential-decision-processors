@@ -463,11 +463,15 @@ class TrajectoryCollector:
             else:
                 batch.non_tensor_batch['is_action_valid'] = np.ones(batch_size, dtype=bool)
 
+            batch.non_tensor_batch['legal_move'] = np.array([info['step_info']['legal_move'] for info in infos], dtype=bool)
+
             valid_action_count = int(np.count_nonzero(batch.non_tensor_batch['is_action_valid']))
+            legal_move_count = int(np.count_nonzero(batch.non_tensor_batch['legal_move']))
             done_env_count = int(np.count_nonzero(dones))
+            positive_rewards_count = int((rewards != 0).sum().item())
             step_elapsed = time.perf_counter() - step_start_time
             print(
-                f"[rollout] step {_step + 1}: {step_elapsed:.1f}s | valid_actions {valid_action_count}/{batch_size} | done_envs {done_env_count}/{batch_size}"
+                f"[rollout] step {_step + 1}: {step_elapsed:.1f}s | valid_actions {valid_action_count}/{batch_size} | legal_moves {legal_move_count}/{batch_size} | done_envs {done_env_count}/{batch_size} | success_envs {positive_rewards_count}/{batch_size}"
             )
 
             # Create reward tensor, only assign rewards for active environments

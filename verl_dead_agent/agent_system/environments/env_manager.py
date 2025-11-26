@@ -1108,7 +1108,7 @@ if __name__ == "__main__":
                 "max_steps": 50,
                 "tokenizer": "qwen25",
                 "valid_seen": False,
-                "load_env_seeds": False
+                "load_env_seeds": True
             },
             "data": {
                 "train_batch_size": 16,
@@ -1138,7 +1138,7 @@ if __name__ == "__main__":
         # First set up our primary envs
         config = build_min_config(env_name)
         train_envs, val_envs = make_envs(config)   # this gets done once in our main ppo code
-        envs = train_envs  # manually set so we can test our val envs
+        envs = val_envs  # manually set so we can test our val envs
 
         # Get absolute path to sample_outputs folder
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1238,5 +1238,6 @@ if __name__ == "__main__":
             close_quietly(val_envs)
         print(f"[smoke] Done {env_name}")
 
-    for name in (["tales_alfworld", "tales_twx"]):
+    # for name in (["tales_alfworld", "tales_twx"]):
+    for name in (["tales_twx"]):
         smoke(name)

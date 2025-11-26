@@ -48,14 +48,11 @@ class AlfworldResetEnv(gym.Env):
         if seed is not None and hasattr(self._env, "seed"):
             self._env.seed(seed)
         obs, infos = self._env.reset()
-        infos['look'] = [""]
         return obs, infos
 
     def step(self, actions):
         # Manually hacking because alfworld doesn't return 'look' when you include description in the env_infos
         obs, scores, dones, infos = self._env.step(actions)
-        obs_look, _, _, _ = self._env.step(["look"])
-        infos['look'] = obs_look
         return obs, scores, dones, infos
 
     def render(self, *args, **kwargs):

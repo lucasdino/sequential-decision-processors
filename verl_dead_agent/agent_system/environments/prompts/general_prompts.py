@@ -7,7 +7,7 @@ GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an agent operating in {env_name}, a
 You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
-The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{cur_observation}
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
@@ -18,7 +18,7 @@ GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT = """You are an agent operating in {env_
 You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
-The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{necessary_context}{cur_observation}
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name.{necessary_context}
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
