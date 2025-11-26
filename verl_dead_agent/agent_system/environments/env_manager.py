@@ -1,5 +1,5 @@
 import os, time, ast
-import json
+import json, random
 from pathlib import Path
 from functools import partial
 from collections import defaultdict
@@ -983,8 +983,7 @@ def make_envs(config):
         yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/general_tag/configs', f'config.yaml')
         _envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.train_batch_size, 
                                        group_n=group_n, main_config=config, is_train=True)
-        print("Training environments built successfully.")
-        _val_envs = build_general_envs(yaml_filepath, seed=config.env.seed + 1000, env_num=config.data.val_batch_size, 
+        _val_envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.val_batch_size, 
                                            group_n=1, main_config=config, is_train=False)
         projection_f = partial(general_projection)
         envs = GeneralEnvironmentManager(_envs, projection_f, target_env, config=config)
@@ -1108,16 +1107,16 @@ if __name__ == "__main__":
                 "reward_mode": "goal-only",
                 "max_steps": 50,
                 "tokenizer": "qwen25",
-                "valid_seen": True,
-                "load_env_seeds": True
+                "valid_seen": False,
+                "load_env_seeds": False
             },
             "data": {
-                "train_batch_size": 4,        # instantiate a couple envs
-                "val_batch_size": 4,
+                "train_batch_size": 16,
+                "val_batch_size": 16,
                 "max_prompt_length": 512*2
             },
             "actor_rollout_ref": {
-                "model": {"path": "models/bert-case"},     # lightweight tokenizer
+                "model": {"path": "models/bert-case"},
                 "actor": {"ppo_max_token_len_per_gpu": 8192}
             },
         })
@@ -1138,8 +1137,9 @@ if __name__ == "__main__":
 
         # First set up our primary envs
         config = build_min_config(env_name)
-        envs, val_envs = make_envs(config)   # this gets done once in our main ppo code
-        
+        train_envs, val_envs = make_envs(config)   # this gets done once in our main ppo code
+        envs = train_envs  # manually set so we can test our val envs
+
         # Get absolute path to sample_outputs folder
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         sample_outputs_dir = os.path.join(current_file_dir, 'sample_outputs')
@@ -1187,9 +1187,8 @@ if __name__ == "__main__":
                     f.write(json.dumps(output) + '\n')
         
         try:
-            for j in range(1):
-                # Train envs
-                import random
+            # for batch_num in range(1):
+            while len(envs.envs.workers) > 0:
                 obs, infos = envs.reset()
                 gold_paths = [inf['env_provided']['extra.walkthrough'] for inf in infos]
 
@@ -1205,12 +1204,6 @@ if __name__ == "__main__":
                         else:
                             new_g.append(f"inventory")   # Doing this to ensure the model learns to use inventory call thru synth data
                     gold_paths[g_idx] = new_g
-
-
-                # num_g_steps = 0
-                # for g in gold_paths:
-                #     num_g_steps += len(g)
-                # print(num_g_steps)
 
                 num_envs = len(envs.envs.workers)
                 finished = [False] * num_envs
@@ -1232,27 +1225,18 @@ if __name__ == "__main__":
                         else:
                             keep_mask.append(False)
 
-                    # print(f"{step:>3}: {sum(keep_mask)}")
+                    print(f"{step:>3}: {sum(keep_mask)}")
                     filtered_obs   = [x for x, keep in zip(obs['text'], keep_mask) if keep]
                     filtered_rews  = [x for x, keep in zip(rewards,       keep_mask) if keep]
                     filtered_infos = [x for x, keep in zip(infos,         keep_mask) if keep]
                     filtered_dones = [x for x, keep in zip(dones,         keep_mask) if keep]
 
                     if filtered_obs:
-                        write_step_output(f'{env_name}_train_step.jsonl', filtered_obs, filtered_rews, filtered_dones, filtered_infos)
-
-            # Val envs
-            # vobs, vinfos = val_envs.reset()
-            # print(f"[smoke] Reset OK (val): n={len(vinfos)}")
-            # vtext_actions = ["look"] * len(vinfos)
-            # vobs, vrewards, vdones, vinfos = val_envs.step(vtext_actions)
-            # print(f"[smoke] Step OK (val): rewards={vrewards}, dones={vdones}")
-            # write_step_output(f'{env_name}_val_step.jsonl', vobs, vrewards, vdones, vinfos)
+                        write_step_output(f'{env_name}_valid.jsonl', filtered_obs, filtered_rews, filtered_dones, filtered_infos)
         finally:
             close_quietly(envs)
             close_quietly(val_envs)
         print(f"[smoke] Done {env_name}")
 
-    # for name in (["tales_alfworld", "tales_textworld" , "tales_twx"]):
     for name in (["tales_alfworld", "tales_twx"]):
         smoke(name)

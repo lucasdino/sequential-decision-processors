@@ -95,6 +95,7 @@ class GeneralTWEnv(object):
                 # Optionally can load in our seeds as well
                 if load_env_seeds:
                     valid_seeds = self._load_validation_games("twx_valid.txt")
+                    valid_seeds = [int(v) for v in valid_seeds]
 
                 self.game_files = train_seeds if train_eval == "train" else valid_seeds
                 print(colored(f"Using ALFWorld framework with {len(self.game_files)} games.", 'green'))

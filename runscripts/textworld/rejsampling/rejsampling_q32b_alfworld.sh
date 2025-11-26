@@ -42,6 +42,8 @@ env_name=tales_alfworld
 env_max_steps=20
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
+valid_seen=False
+load_env_seeds=False
 model_path=$PROJ_DIR/models/Qwen3-32B
 # model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
@@ -131,6 +133,8 @@ uv run -m verl.trainer.main_ppo \
     +env.reward_mode="goal-only" \
     +env.num_envs_per_batch=1 \
     +env.tokenizer=${tokenizer_type} \
+    +env.valid_seen=${valid_seen} \
+    +env.load_env_seeds=${load_env_seeds} \
     \
     +intermediary.enabled=False \
     \
