@@ -9,7 +9,7 @@ import ray
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import *
 
-ALFWORLD_VERBS = ['go to _', 'open _', 'close _', 'take _ from _', 'move _ to _', 'use _', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'slice _ with _', 'examine _', 'inventory']
+ALFWORLD_VERBS = ['go to _', 'open _', 'close _', 'take _ from _', 'move _ to _', 'use _', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'examine _', 'inventory']
 TRIVIAL_ENV_OBS = ["Nothing happens.", "Unknown action: I'm not sure what you mean."]
 
 def load_config_file(path):

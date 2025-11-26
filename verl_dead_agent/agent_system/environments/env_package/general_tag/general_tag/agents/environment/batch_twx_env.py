@@ -5,7 +5,7 @@ import numpy as np
 from .download_game_files import get_seeds_twx, TEXTWORLD_EXPRESS_TASKS
 
 
-COOKINGWORLD_VERBS = ["chop _ with _", "cook _ with _", "dice _ with _", "drop _", "examine _", "go _", "open _", "slice _ with _", "take _", "take _ from _", "prepare meal", "eat meal", "look around", "inventory"]
+COOKINGWORLD_VERBS = ["chop _", "cook _ in _", "dice _", "drop _", "examine _", "go _", "open _", "slice _ ", "take _", "prepare meal", "eat meal", "look around", "inventory"]
 
 # Base twx class, taken from TALES.
 class TextWorldExpressEnv(gym.Env):
