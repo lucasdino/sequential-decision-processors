@@ -36,10 +36,10 @@ REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/twx
 # ##############################
 # Main training args we'll change
 # ##############################
-env_seed=10
+env_seed=42
 env_name=tales_twx
 # env_name can be 'tales_alfworld' or 'tales_twx'
-env_max_steps=30
+env_max_steps=25
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 valid_seen=False
@@ -48,16 +48,17 @@ model_path=$PROJ_DIR/models/Qwen3-32B
 # model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-32b-rejsampling-twx
-total_epochs=5
-train_steps=5
+total_epochs=1
+# change train_steps -- this is the 'max' number of training steps we do. del line if we want to go based on epochs
+train_steps=10
 save_freq=-1
-test_freq=10
+test_freq=20
 num_cpus_per_env_worker=0.25
-train_prompt_bsz=32
-val_prompt_bsz=32
+train_prompt_bsz=64
+val_prompt_bsz=64
 max_prompt_length=$((512 * 2))
 max_response_length=$((512 * 2))
-max_total_length=$((max_prompt_length + max_response_length))
+max_total_length=$((max_prompt_length+max_response_length))
 num_nodes=1
 micro_bs_per_gpu=$((32 / (num_nodes*8)))
 

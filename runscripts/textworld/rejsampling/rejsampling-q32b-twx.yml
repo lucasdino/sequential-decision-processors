@@ -1,0 +1,48 @@
+name: sdp-q32b-rejectionsampling-twx
+image: mosaicml/pytorch
+compute:
+    gpus: 8
+    cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: wandb
+    project: llm-chess-rejsampling
+    entity: lucasdino-ucsd
+env_variables:
+  SH_FILE: "rejsampling_q32b_twx.sh"
+  EXPERIMENT_NAME: "q32b-11-26-twx-rft"
+command: |-
+  # Need to install java for twx
+  apt update
+  apt install -y default-jdk
+
+  # Get env set up on cluster (in /home/...)
+  cd home
+  git clone --recurse-submodules https://github.com/lucasdino/sequential-decision-processors.git
+  cd sequential-decision-processors
+  mv runscripts verl_dead_agent/
+  cd verl_dead_agent
+
+  pip install uv
+  uv venv .venv
+  source .venv/bin/activate
+  uv add wheel packaging
+  uv add flash-attn==2.7.4.post1 --no-build-isolation
+
+  # Download our alfworld data
+  alfworld-download -f
+
+  cd ..
+  hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
+  cd verl_dead_agent
+
+  # Run our rejsampling script
+  chmod +x runscripts/*.sh
+  runscripts/textworld/rejsampling/$SH_FILE
+
+  # Save down rejsample data
+  pip install --no-cache-dir awscli
+  aws s3 cp /home/sequential-decision-processors/rej_sampling_data s3://seq-dec-proc/rej_sampling_data/$EXPERIMENT_NAME --recursive

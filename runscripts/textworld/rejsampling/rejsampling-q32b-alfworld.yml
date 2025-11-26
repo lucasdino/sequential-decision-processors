@@ -1,4 +1,4 @@
-name: sdp-q32b-rejectionsampling
+name: sdp-q32b-rejectionsampling-alfworld
 image: mosaicml/pytorch
 compute:
     gpus: 8
@@ -12,8 +12,8 @@ integrations:
     project: llm-chess-rejsampling
     entity: lucasdino-ucsd
 env_variables:
-  SH_FILE: "alfworld_rejsampling_q32b.sh"
-  EXPERIMENT_NAME: "q32b-11-11-v2"
+  SH_FILE: "rejsampling_q32b_alfworld.sh"
+  EXPERIMENT_NAME: "q32b-11-26-alfworld-rft"
 command: |-
   # Get env set up on cluster (in /home/...)
   cd home
@@ -30,6 +30,10 @@ command: |-
 
   # Download our alfworld data
   alfworld-download -f
+
+  cd ..
+  hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
+  cd verl_dead_agent
 
   # Run our rejsampling script
   chmod +x runscripts/*.sh
