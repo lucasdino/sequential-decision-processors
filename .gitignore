@@ -1,7 +1,8 @@
 # directories not to track
-data/
+/data/
 outputs/
 models/
+llm_chess/
 
 # games
 tw_games
@@ -12,7 +13,8 @@ uploaded_data/
 cleaned_data/
 textworld_synthetic/
 train_data/
-sequential_decision_processors/data/alfworld
+sequential_decision_processors/data/textworld
+sequential_decision_processors/data/rejection_sampling
 
 # Various information
 token_stats/

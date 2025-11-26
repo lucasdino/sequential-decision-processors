@@ -1,13 +1,13 @@
 REFINEMENT_PROMPT = "Placeholdr"
 
-ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it. You can use 'inventory' to get your current inventory."
-TWX_SPEC_INSTRUCTIONS = "\nYou can use 'look around' or 'inventory' to get your current observation and current inventory, respectively."
+ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it. You can use 'inventory' to get your current inventory. You should reference each object by its precise name -- e.g., 'mug 3'."
+TWX_SPEC_INSTRUCTIONS = "\nYou can use 'look around' or 'inventory' to get your current observation and current inventory, respectively. You must first take a knife in order to cut objects. Refer to objects by their base names -- e.g., instead of 'raw chicken leg' us 'chicken leg'."
 
 GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an agent operating in {env_name}, an interactive-fiction, text-world environment.
 You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
-The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name. Note that you have a limited inventory size.
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions. Note that you have a limited inventory size.
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
@@ -18,7 +18,7 @@ GENERAL_INSTRUCTIONS_WITH_VERBS_CONTEXT = """You are an agent operating in {env_
 You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
-The set of action templates are the following: {verbs}. You should only use these verbs in your actions, and whenever you reference an object you should use its precise name. Note that you have a limited inventory size.{necessary_context}
+The set of action templates are the following: {verbs}. You should only use these verbs in your actions. Note that you have a limited inventory size.{necessary_context}
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
