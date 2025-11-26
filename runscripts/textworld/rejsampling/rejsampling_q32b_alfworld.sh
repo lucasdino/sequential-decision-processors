@@ -48,7 +48,7 @@ model_path=$PROJ_DIR/models/Qwen3-32B
 # model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
 experiment_name=sdp-q25-32b-rejsampling-alfworld
-total_epochs=1
+total_epochs=10
 # change train_steps -- this is the 'max' number of training steps we do. del line if we want to go based on epochs
 train_steps=10
 save_freq=-1

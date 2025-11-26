@@ -9,7 +9,7 @@ import ray
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment import get_environment
 from agent_system.environments.env_package.general_tag.general_tag.agents.environment.utils import *
 
-ALFWORLD_VERBS = ['go to _', 'open _', 'close _', 'take _ from _', 'move _ to _', 'use _', 'heat _ with _', 'cool _ with _', 'clean _ with _', 'examine _', 'inventory']
+ALFWORLD_VERBS = ['clean _ with _', 'close _', 'cool _ with _', 'examine _', 'go to _', 'heat _ with _', 'move _ to _', 'open _', 'slice _ with _', 'take _ from _', 'use _', 'inventory', 'get legal moves']
 TRIVIAL_ENV_OBS = ["Nothing happens.", "Unknown action: I'm not sure what you mean."]
 
 def load_config_file(path):
@@ -83,6 +83,11 @@ class GeneralWorker:
         actions = [action] 
         
         obs, scores, dones, infos = self.env.step(actions)
+        
+        # Manually building in this case
+        if action == "get legal moves":
+            obs = (f"Possible legal actions are: {self._get_admissable(infos["admissible_commands"])}",)
+
         obs = self._process_obs(obs)
         infos = self._process_infos(infos)
         infos['step_info']['obs'] = obs[0]
@@ -169,6 +174,16 @@ class GeneralWorker:
             return (obs,)
         else:
             raise ValueError(f"Please add the env to this process_obs function (even if just identity).")
+
+    def _get_admissable(self, admissable_actions):
+        acts = []
+        if self.env_type_string and "alfworld" in self.env_type_string:
+            admissable_actions = admissable_actions[0]
+        for act in admissable_actions:
+            if "restart" in act or "exit" in act or "save" in act or "help" in act:
+                continue
+            acts.append(act)
+        return acts
 
     # Necessary Context Managers
     def _update_necessary_context(self, obs):

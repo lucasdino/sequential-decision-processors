@@ -1198,11 +1198,15 @@ if __name__ == "__main__":
                     attempt_g = 0
                     while seen_g < len(g):
                         attempt_g += 1
-                        if random.random() > 0.1:
+                        rng = random.random()
+                        if rng > 0.2:
                             new_g.append(g[seen_g])
                             seen_g += 1
                         else:
-                            new_g.append(f"inventory")   # Doing this to ensure the model learns to use inventory call thru synth data
+                            if rng < 0.1:
+                                new_g.append(f"inventory")   # Doing this to ensure the model learns to use inventory call thru synth data
+                            else:
+                                new_g.append("get legal moves")
                     gold_paths[g_idx] = new_g
 
                 num_envs = len(envs.envs.workers)
