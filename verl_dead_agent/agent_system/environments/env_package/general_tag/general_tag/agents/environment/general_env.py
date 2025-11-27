@@ -26,12 +26,12 @@ class GeneralTWEnv(object):
     '''
 
     def __init__(self, config, train_eval="train", main_config=None):
-        print("Initializing GeneralTWEnv...")
+        # print("Initializing GeneralTWEnv...")
         self.config = config
         self.main_config = main_config
         self.train_eval = train_eval
-        print("Train eval value:", train_eval)
-        print("Main config:", self.main_config)
+        # print("Train eval value:", train_eval)
+        # print("Main config:", self.main_config)
         
         if 'tales' in self.main_config['env']['env_name']:
             framework_name = self.main_config['env']['env_name'].split('_')[-1]
@@ -98,14 +98,14 @@ class GeneralTWEnv(object):
                     valid_seeds = [int(v) for v in valid_seeds]
 
                 self.game_files = train_seeds if train_eval == "train" else valid_seeds
-                print(colored(f"Using ALFWorld framework with {len(self.game_files)} games.", 'green'))
+                print(colored(f"Using TWX framework with {len(self.game_files)} games.", 'green'))
             
             else:
                 self.collect_game_files(self.config['framework'])
         else:
             raise ValueError("No framework specified in config. Please specify a framework.")
         self.use_expert = False
-        print(f"use_expert = {self.use_expert}")
+        # print(f"use_expert = {self.use_expert}")
 
     def init_n_env(self, game_files):
         request_infos = textworld.EnvInfos(won=True, lost=True, admissible_commands=True, verbs=True, extras=["gamefile"], moves=True)

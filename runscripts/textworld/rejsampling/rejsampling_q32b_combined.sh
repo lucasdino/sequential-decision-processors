@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
 export HYDRA_FULL_ERROR=1
 export VLLM_ATTENTION_BACKEND=FLASH_ATTENTION_2   # not XFORMERS
 # export VLLM_ATTENTION_BACKEND=XFORMERS
@@ -17,75 +20,76 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1   # recommended with FlashAttn
 export OMP_NUM_THREADS=8
 export MKL_NUM_THREADS=8
 
-
-
 # ##############################
 # Define file paths
 # ##############################
 HOME_DIR="/home"
-PROJ_DIR=$HOME_DIR/sequential-decision-processors
-verl_workdir=$PROJ_DIR/verl_dead_agent/
-DATA_DIR=$PROJ_DIR/data/verl-agent
+PROJ_DIR=${HOME_DIR}/sequential-decision-processors
+verl_workdir=${PROJ_DIR}/verl_dead_agent
+DATA_DIR=${PROJ_DIR}/data/verl-agent
 ENGINE=${1:-vllm}
-TRAIN_PARQUET=$DATA_DIR/text/train.parquet
-VAL_PARQUET=$DATA_DIR/text/test.parquet
-REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/alfworld
-
-
+TRAIN_PARQUET=${DATA_DIR}/text/train.parquet
+VAL_PARQUET=${DATA_DIR}/text/test.parquet
+REJ_SAMPLING_ROOT=${PROJ_DIR}/rej_sampling_data/combined
 
 # ##############################
-# Main training args we'll change
+# Main training args
 # ##############################
 env_seed=42
-env_name=tales_alfworld
-# env_name can be 'tales_alfworld' or 'tales_twx'
-env_max_steps=25
+env_name=tales_twx_alfworld
+twx_max_steps=40
+alfworld_max_steps=25
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 valid_seen=False
 load_env_seeds=False
-model_path=$PROJ_DIR/models/Qwen3-32B
-# model_path=Qwen/Qwen3-32B
+model_path=Qwen/Qwen3-32B
 wandb_project_name=sdp_alfworld_rejsampling
-experiment_name=sdp-q25-32b-rejsampling-alfworld
-total_epochs=10
-# change train_steps -- this is the 'max' number of training steps we do. del line if we want to go based on epochs
-train_steps=10
-save_freq=-1
-test_freq=20
-num_cpus_per_env_worker=0.25
 train_prompt_bsz=64
 val_prompt_bsz=64
 max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 2))
-max_total_length=$((max_prompt_length+max_response_length))
+max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
-micro_bs_per_gpu=$((32 / (num_nodes*8)))
+micro_bs_per_gpu=$((32 / (num_nodes * 8)))
+num_cpus_per_env_worker=0.25
+save_freq=-1
+test_freq=20
+total_epochs=10
+# Two 64-sample batches per environment (twx & alfworld)
+train_steps=4
 
+timestamp=$(date +%Y%m%d_%H%M%S)
+rollout_save_dir=${REJ_SAMPLING_ROOT}/${timestamp}
+experiment_name="sdp-q25-32b-rejsampling-tales-combined-${timestamp}"
+mkdir -p "${rollout_save_dir}"
 
-# We only use data preparation to indicate the modality and the data size.
+# ##############################
+# Prep synthetic text inputs (same modality as training)
+# ##############################
 uv run -m examples.data_preprocess.prepare \
     --mode 'text' \
     --local_dir ${DATA_DIR} \
     --train_data_size ${train_prompt_bsz} \
     --val_data_size ${val_prompt_bsz}
 
+# ##############################
+# Single UV run covering both envs via multi-env manager
+# ##############################
 uv run -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     algorithm.use_kl_in_reward=False \
     algorithm.norm_adv_by_std_in_grpo=False \
     \
-    \
     data.train_files=${TRAIN_PARQUET} \
     data.val_files=${VAL_PARQUET} \
     data.train_batch_size=${train_prompt_bsz} \
-    data.val_batch_size=${val_prompt_bsz}\
+    data.val_batch_size=${val_prompt_bsz} \
     data.max_prompt_length=${max_prompt_length} \
     data.max_response_length=${max_response_length} \
     data.filter_overlong_prompts=True \
     data.truncation='left' \
     data.return_raw_chat=True \
-    \
     \
     actor_rollout_ref.actor.fsdp_config.reshard_after_forward=False \
     actor_rollout_ref.ref.fsdp_config.reshard_after_forward=False \
@@ -121,25 +125,29 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.free_cache_engine=False \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=8 \
-    +actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
-    +actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
+    actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
+    actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
     \
     env.env_name=${env_name} \
     env.seed=${env_seed} \
-    env.max_steps=${env_max_steps} \
+    env.max_steps=${twx_max_steps} \
+    env.multi_env_scheduler.order=[twx, alfworld] \
+    env.multi_env_scheduler.strategy=round_robin \
+    env.multi_env_scheduler.env_overrides.twx.max_steps=${twx_max_steps} \
+    env.multi_env_scheduler.env_overrides.alfworld.max_steps=${alfworld_max_steps} \
     env.rollout.n=1 \
-    +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
-    +env.prompt_template=${prompt_template} \
-    +env.reward_mode="goal-only" \
-    +env.num_envs_per_batch=1 \
-    +env.tokenizer=${tokenizer_type} \
-    +env.valid_seen=${valid_seen} \
-    +env.load_env_seeds=${load_env_seeds} \
+    env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
+    env.prompt_template=${prompt_template} \
+    env.reward_mode="goal-only" \
+    env.num_envs_per_batch=1 \
+    env.tokenizer=${tokenizer_type} \
+    env.valid_seen=${valid_seen} \
+    env.load_env_seeds=${load_env_seeds} \
     \
-    +intermediary.enabled=False \
+    intermediary.enabled=False \
     \
-    +trainer.rejection_sampling=True \
-    +trainer.rollout_data_dir=${REJ_SAMPLING_DATA_DIR} \
+    trainer.run_type='rejection_sampling' \
+    trainer.rollout_data_dir=${rollout_save_dir} \
     trainer.total_training_steps=${train_steps} \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \
@@ -151,4 +159,4 @@ uv run -m verl.trainer.main_ppo \
     trainer.save_freq=${save_freq} \
     trainer.test_freq=${test_freq} \
     trainer.total_epochs=${total_epochs} \
-    trainer.max_actor_ckpt_to_keep=1 \
+    trainer.max_actor_ckpt_to_keep=1

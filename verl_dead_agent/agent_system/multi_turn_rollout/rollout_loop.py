@@ -395,6 +395,11 @@ class TrajectoryCollector:
 
             batch.non_tensor_batch['uid'] = uid_batch
             batch.non_tensor_batch['traj_uid'] = traj_uid
+            env_label = getattr(envs, "current_env_name", None)
+            if env_label is None:
+                env_label = getattr(envs, "env_name", None)
+            if env_label is not None:
+                batch.non_tensor_batch['env_name'] = np.array([env_label for _ in range(batch_size)], dtype=object)
 
             batch = batch.union(batch_output)
             
@@ -465,13 +470,14 @@ class TrajectoryCollector:
 
             batch.non_tensor_batch['legal_move'] = np.array([info['step_info']['legal_move'] for info in infos], dtype=bool)
 
-            valid_action_count = int(np.count_nonzero(batch.non_tensor_batch['is_action_valid']))
-            legal_move_count = int(np.count_nonzero(batch.non_tensor_batch['legal_move']))
+            valid_action_count = int(np.count_nonzero(np.logical_and(active_masks, batch.non_tensor_batch['is_action_valid'])))
+            legal_move_count = int(np.count_nonzero(np.logical_and(active_masks, batch.non_tensor_batch['legal_move'])))
             done_env_count = int(np.count_nonzero(dones))
-            positive_rewards_count = int((rewards != 0).sum().item())
+            positive_rewards_count = int((rewards > 0).sum().item())
             step_elapsed = time.perf_counter() - step_start_time
+            live_envs = batch_size - int(np.count_nonzero(is_done))
             print(
-                f"[rollout] step {_step + 1}: {step_elapsed:.1f}s | valid_actions {valid_action_count}/{batch_size} | legal_moves {legal_move_count}/{batch_size} | done_envs {done_env_count}/{batch_size} | success_envs {positive_rewards_count}/{batch_size}"
+                f"[rollout] step {_step + 1}: {step_elapsed:.1f}s | valid_actions {valid_action_count}/{live_envs} | legal_moves {legal_move_count}/{live_envs} | done_envs {done_env_count}/{batch_size} | success_envs {positive_rewards_count}/{batch_size}"
             )
 
             # Create reward tensor, only assign rewards for active environments

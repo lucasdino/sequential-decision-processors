@@ -434,6 +434,11 @@ class RayPPOTrainer:
         self.device_name = device_name
         self.validation_generations_logger = ValidationGenerationsLogger()
 
+        # ------- Added for multi-env bookkeeping -------
+        self._env_turn_counters = defaultdict(int)
+        self._env_turn_step = 0
+        # ------- Added for multi-env bookkeeping -------
+
         # if ref_in_actor is True, the reference policy will be actor without lora applied
         self.ref_in_actor = config.actor_rollout_ref.model.get('lora_rank', 0) > 0
 
@@ -646,6 +651,55 @@ class RayPPOTrainer:
                     self.config.critic.optim.total_training_steps = total_training_steps
         except Exception as e:
             print(f"Warning: Could not set total_training_steps in config. Structure missing? Error: {e}")
+
+    # ------- Added for multi-env metrics -------
+    def _log_multi_env_metrics(self, logger, batch: DataProto, epoch: int) -> None:
+        env_names = batch.non_tensor_batch.get("env_name") if batch is not None else None
+        if env_names is None:
+            return
+        env_names = np.asarray(env_names)
+        if env_names.size == 0:
+            return
+
+        rewards = batch.batch.get("episode_rewards")
+        lengths = batch.batch.get("episode_lengths")
+        unique_envs = np.unique(env_names)
+
+        for raw_name in unique_envs:
+            if raw_name is None:
+                continue
+            env_name = str(raw_name)
+            if not env_name:
+                continue
+
+            mask_np = env_names == raw_name
+            sample_count = int(mask_np.sum())
+            if sample_count == 0:
+                continue
+
+            safe_key = env_name.replace("/", "_")
+            mask_cpu = torch.as_tensor(mask_np, dtype=torch.bool)
+            env_metrics = {
+                f"multi_env/{safe_key}/batch_size": sample_count,
+                f"multi_env/{safe_key}/epoch": epoch,
+                f"multi_env/{safe_key}/global_step": self.global_steps,
+            }
+
+            if rewards is not None:
+                mask = mask_cpu.to(rewards.device)
+                env_metrics[f"multi_env/{safe_key}/reward_mean"] = float(rewards[mask].mean().item())
+
+            if lengths is not None:
+                mask = mask_cpu.to(lengths.device)
+                env_metrics[f"multi_env/{safe_key}/episode_len_mean"] = float(lengths[mask].mean().item())
+
+            self._env_turn_step += 1
+            env_metrics[f"multi_env/{safe_key}/turn_index"] = self._env_turn_step
+
+            env_step = self._env_turn_counters[env_name]
+            self._env_turn_counters[env_name] += 1
+            logger.log(data=env_metrics, step=env_step)
+    # ------- Added for multi-env metrics -------
 
     def _dump_generations(self, inputs, outputs, scores, reward_extra_infos_dict, dump_path):
         """Dump rollout/validation samples as JSONL."""
@@ -1034,20 +1088,37 @@ class RayPPOTrainer:
             config=OmegaConf.to_container(self.config, resolve=True),
         )
 
+        run_type = getattr(self.config.trainer, "run_type", "train").lower()
+        is_eval_run = run_type == "eval"
+        is_rejection_run = run_type == "rejection_sampling"
+        rejection_mode = is_rejection_run
+        self._run_type = run_type
+
         self.global_steps = 0
 
         # load checkpoint before doing anything
         self._load_checkpoint()
 
+        initial_val_metrics = None
         # perform validation before training
         # currently, we only support validation using the reward_function.
         if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
             val_metrics = self._validate()
+            initial_val_metrics = val_metrics
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
             logger.log(data=val_metrics, step=self.global_steps)
             if self.config.trainer.get("val_only", False):
                 return
+
+        if is_eval_run:
+            if initial_val_metrics is not None:
+                val_metrics = initial_val_metrics
+            else:
+                val_metrics = self._validate()
+            pprint(f"Evaluation metrics: {val_metrics}")
+            logger.log(data=val_metrics, step=self.global_steps)
+            return
 
         # add tqdm
         progress_bar = tqdm(total=self.total_training_steps, initial=self.global_steps, desc="Training Progress")
@@ -1138,7 +1209,7 @@ class RayPPOTrainer:
                     # This mode collects trajectories and rewards from the train set to create rejection sampling SFT data.
                     # You run massive rollouts (up to a specified number) and store trajectories with their rewards,
                     # which will be used to filter/select high-quality samples for supervised fine-tuning.
-                    if self.config.trainer.get("rejection_sampling", False):
+                    if rejection_mode:
                         del batch
                         batch = gen_batch_output
                         
@@ -1430,6 +1501,20 @@ class RayPPOTrainer:
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
                 metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
+
+                legal_moves = batch.non_tensor_batch.get("legal_move")
+                if legal_moves is not None:
+                    legal_np = np.asarray(legal_moves, dtype=float)
+                    metrics["training/percent_legal_moves"] = float(legal_np.mean())
+
+                episode_rewards = batch.batch.get("episode_rewards")
+                if episode_rewards is not None:
+                    success_ratio = (episode_rewards > 0).float().mean().item()
+                    metrics["training/percent_successful"] = float(success_ratio)
+
+                # ------- Added for multi-env metrics -------
+                self._log_multi_env_metrics(logger, batch, epoch)
+                # ------- Added for multi-env metrics -------
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)

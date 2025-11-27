@@ -39,7 +39,7 @@ REJ_SAMPLING_DATA_DIR=$PROJ_DIR/rej_sampling_data/twx
 env_seed=42
 env_name=tales_twx
 # env_name can be 'tales_alfworld' or 'tales_twx'
-env_max_steps=25
+env_max_steps=35
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 valid_seen=False
@@ -56,7 +56,7 @@ test_freq=20
 num_cpus_per_env_worker=0.25
 train_prompt_bsz=64
 val_prompt_bsz=64
-max_prompt_length=$((512 * 2))
+max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 2))
 max_total_length=$((max_prompt_length+max_response_length))
 num_nodes=1

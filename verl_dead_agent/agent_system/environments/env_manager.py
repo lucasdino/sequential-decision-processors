@@ -1,9 +1,17 @@
 import os, time, ast
-import json, random
+import json
+import random, copy
+import argparse
 from pathlib import Path
 from functools import partial
 from collections import defaultdict
-from typing import List, Tuple, Dict, Union, Any
+from typing import List, Tuple, Dict, Union, Any, Optional
+
+try:
+    from omegaconf import DictConfig  # type: ignore
+except ImportError:  # pragma: no cover
+    class DictConfig:  # type: ignore
+        pass
 
 import ray
 import torch
@@ -29,6 +37,8 @@ def set_gamefile(infos, gamefile):
         else:
             infos[i]['extra.gamefile'] = None
     return infos
+
+_KNOWN_TALES_GENERAL_TARGETS = {"twx", "alfworld", "scienceworld", "textworld"}
 
 class GeneralEnvironmentManager(EnvironmentManagerBase):
     def __init__(self, envs, projection_f, env_name, istrain = True, config=None, use_tokenizer=True):
@@ -105,7 +115,7 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
 
         return next_observations, rewards, dones, infos
         
-    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 10) -> List[str]:
+    def build_text_obs(self, text_obs: List[str], infos: List[Dict] = None, init: bool = False, history_length: int = 25) -> List[str]:
         """
         This function builds the text observation for the agent.
         """
@@ -254,6 +264,286 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 if gamefile:
                     self._process_gamefile(gamefile, won_value, success)
                 return  # Exit after finding the first active mask
+
+
+class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
+    """Wrap multiple GeneralEnvironmentManager instances and rotate between them."""
+
+    def __init__(
+        self,
+        managers: List[GeneralEnvironmentManager],
+        combo_name: str,
+        config=None,
+        scheduler_cfg: Dict[str, Any] | None = None,
+        mode: str = "train",
+        env_metadata: List[Dict[str, Any]] | None = None,
+    ) -> None:
+        super().__init__(envs=None, projection_f=None, env_name=combo_name)
+        if not managers:
+            raise ValueError("MultiGeneralEnvironmentManager requires at least one manager")
+        self.managers = managers
+        self.envs = managers
+        self.config = config
+        self.mode = mode
+        self._active_manager: GeneralEnvironmentManager | None = None
+        self._active_index: int | None = None
+        self._scheduler_cfg = scheduler_cfg or {}
+        self._sequence = self._build_sequence(self._scheduler_cfg.get("order"))
+        self._sequence_ptr = -1
+        self._strategy = self._scheduler_cfg.get("strategy", "round_robin")
+        self._weights = self._normalize_weights(self._scheduler_cfg.get("weights"))
+        if self._strategy == "weighted" and self._weights is None:
+            raise ValueError("multi_env_scheduler.weights must be set when strategy='weighted'")
+        seed = self._scheduler_cfg.get("seed")
+        self._rng = random.Random(seed)
+        if env_metadata is None:
+            self._env_metadata = [{} for _ in self.managers]
+        elif len(env_metadata) != len(self.managers):
+            raise ValueError("env_metadata length must match number of managers")
+        else:
+            self._env_metadata = env_metadata
+
+        # Ensure we start without spinning up every worker pool at once
+        self._teardown_inactive(None)
+
+    def _build_sequence(self, explicit_order: List[str] | None) -> List[int]:
+        if explicit_order:
+            name_to_idx = {m.env_name: idx for idx, m in enumerate(self.managers)}
+            missing = [name for name in explicit_order if name not in name_to_idx]
+            if missing:
+                raise ValueError(
+                    "Unknown environment names in scheduler sequence: "
+                    + ", ".join(missing)
+                )
+            seq = [name_to_idx[name] for name in explicit_order]
+            if not seq:
+                raise ValueError("Scheduler sequence must reference at least one environment")
+            return seq
+        return list(range(len(self.managers)))
+
+    def _normalize_weights(self, weights: List[float] | None) -> List[float] | None:
+        if not weights:
+            return None
+        if len(weights) != len(self.managers):
+            raise ValueError("weights length must match number of managers")
+        total = float(sum(weights))
+        if total <= 0:
+            raise ValueError("weights must sum to a positive value")
+        return [w / total for w in weights]
+
+    def _select_next_index(self) -> int:
+        if self._strategy == "weighted" and self._weights is not None:
+            return self._rng.choices(range(len(self.managers)), weights=self._weights, k=1)[0]
+        self._sequence_ptr = (self._sequence_ptr + 1) % len(self._sequence)
+        return self._sequence[self._sequence_ptr]
+
+    def _set_active_manager(self, index: int) -> None:
+        target = self.managers[index]
+        self._ensure_manager_workers(target)
+        self._active_index = index
+        self._active_manager = target
+        self._teardown_inactive(index)
+
+    def _tag_infos(self, infos: List[Dict]) -> None:
+        active_name = self.current_env_name
+        if not active_name:
+            return
+        metadata = {}
+        if self._active_index is not None and 0 <= self._active_index < len(self._env_metadata):
+            metadata = self._env_metadata[self._active_index]
+        for info in infos:
+            run_info = info.setdefault("run_info", {})
+            run_info["env_name"] = active_name
+            run_info["env_combo"] = self.env_name
+            for key, value in metadata.items():
+                run_info.setdefault(key, value)
+
+    @property
+    def current_env_name(self) -> str | None:
+        if self._active_manager is None:
+            return None
+        return self._active_manager.env_name
+
+    def reset(self):  # type: ignore[override]
+        next_idx = self._select_next_index()
+        self._set_active_manager(next_idx)
+        obs, infos = self._active_manager.reset()
+        self._tag_infos(infos)
+        return obs, infos
+
+    def step(self, text_actions: List[str], refined_responses: List[str] | None = None):  # type: ignore[override]
+        if self._active_manager is None:
+            raise RuntimeError("reset must be called before step in MultiGeneralEnvironmentManager")
+        obs, rewards, dones, infos = self._active_manager.step(text_actions, refined_responses=refined_responses)
+        self._tag_infos(infos)
+        return obs, rewards, dones, infos
+
+    def success_evaluator(self, *args, **kwargs):  # type: ignore[override]
+        if self._active_manager is None:
+            raise RuntimeError("success_evaluator called before any manager was activated")
+        return self._active_manager.success_evaluator(*args, **kwargs)
+
+    def close(self):
+        self._teardown_inactive(None)
+        for manager in self.managers:
+            try:
+                manager.close()
+            except Exception:
+                pass
+
+    def _ensure_manager_workers(self, manager: GeneralEnvironmentManager) -> None:
+        backend = getattr(manager, "envs", None)
+        if backend is None:
+            return
+        workers = getattr(backend, "workers", None)
+        if workers:
+            return
+        has_capacity = getattr(backend, "has_capacity", None)
+        if callable(has_capacity) and not has_capacity():
+            return
+        launcher = getattr(backend, "launch_workers", None)
+        if callable(launcher):
+            launcher()
+
+    def _teardown_inactive(self, keep_index: Optional[int]) -> None:
+        for idx, manager in enumerate(self.managers):
+            if keep_index is not None and idx == keep_index:
+                continue
+            backend = getattr(manager, "envs", None)
+            closer = getattr(backend, "close", None)
+            if callable(closer):
+                closer()
+
+def _to_plain_container(data):
+    if isinstance(data, dict):
+        return {k: _to_plain_container(v) for k, v in data.items()}
+    if hasattr(data, "items"):
+        return {k: _to_plain_container(v) for k, v in data.items()}
+    if isinstance(data, (list, tuple)):
+        return [_to_plain_container(v) for v in data]
+    return data
+
+
+def _clone_config_with_env_name(config, env_name: str):
+    cfg = copy.deepcopy(config)
+    env_section = getattr(cfg, "env", None)
+    if env_section is None:
+        raise ValueError("Config missing 'env' section")
+    if isinstance(env_section, dict):
+        env_section["env_name"] = env_name
+    else:
+        setattr(env_section, "env_name", env_name)
+    return cfg
+
+
+def _is_dict_like(value):
+    return isinstance(value, (dict, DictConfig))
+
+
+def _get_child(container, key):
+    if isinstance(container, dict):
+        return container.get(key)
+    if isinstance(container, DictConfig):
+        return container.get(key, None)
+    return getattr(container, key, None)
+
+
+def _set_child(container, key, value):
+    if isinstance(container, dict):
+        container[key] = value
+    elif isinstance(container, DictConfig):
+        container[key] = value
+    else:
+        setattr(container, key, value)
+
+
+def _merge_section(section, overrides: Dict[str, Any]):
+    if not overrides:
+        return
+    for key, value in overrides.items():
+        if isinstance(value, dict):
+            current = _get_child(section, key)
+            if current is None or not _is_dict_like(current):
+                _set_child(section, key, copy.deepcopy(value))
+            else:
+                _merge_section(current, value)
+        else:
+            _set_child(section, key, value)
+
+
+def _apply_env_overrides(config, env_key: str, overrides: Dict[str, Any] | None):
+    if not overrides:
+        return
+    env_override = overrides.get(env_key)
+    if not env_override:
+        return
+    env_section = getattr(config, "env", None)
+    if env_section is None:
+        raise ValueError("Config missing 'env' section while applying overrides")
+    _merge_section(env_section, env_override)
+
+
+def _build_general_env_pair(config, target_env: str):
+    from agent_system.environments.env_package.general_tag import build_general_envs, general_projection
+
+    group_n = int(config.env.rollout.n) if config.env.rollout.n > 0 else 1
+    yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/general_tag/configs', 'config.yaml')
+    _envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.train_batch_size,
+                               group_n=group_n, main_config=config, is_train=True)
+    _val_envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.val_batch_size,
+                                   group_n=1, main_config=config, is_train=False)
+    projection_f = partial(general_projection)
+    envs = GeneralEnvironmentManager(_envs, projection_f, target_env, config=config)
+    val_envs = GeneralEnvironmentManager(_val_envs, projection_f, target_env, istrain=False, config=config)
+    return envs, val_envs
+
+
+def _parse_multi_general_targets(env_name: str) -> List[str] | None:
+    lower = env_name.lower()
+    prefix = "tales_"
+    if not lower.startswith(prefix):
+        return None
+    suffix = lower[len(prefix):]
+    if suffix in _KNOWN_TALES_GENERAL_TARGETS:
+        return None
+    parts = suffix.split("_")
+    if len(parts) <= 1:
+        return None
+    normalized = []
+    for part in parts:
+        if part not in _KNOWN_TALES_GENERAL_TARGETS:
+            raise ValueError(f"Unknown TALES environment fragment '{part}' in combo '{env_name}'")
+        normalized.append(part)
+    return normalized
+
+
+def _resolve_scheduler_cfg(config) -> Dict[str, Any]:
+    env_section = getattr(config, "env", None)
+    raw_cfg = getattr(env_section, "multi_env_scheduler", None) if env_section is not None else None
+    if raw_cfg is None:
+        return {}
+    plain_cfg = _to_plain_container(raw_cfg)
+    if not isinstance(plain_cfg, dict):
+        return {}
+    return plain_cfg
+
+
+def _build_multi_general_envs(config, target_envs: List[str]):
+    scheduler_cfg = _resolve_scheduler_cfg(config)
+    env_overrides = scheduler_cfg.pop("env_overrides", None)
+    train_managers = []
+    val_managers = []
+    for env_key in target_envs:
+        env_specific = _clone_config_with_env_name(config, f"tales_{env_key}")
+        _apply_env_overrides(env_specific, env_key, env_overrides)
+        train_env, val_env = _build_general_env_pair(env_specific, env_key)
+        train_managers.append(train_env)
+        val_managers.append(val_env)
+    combo_name = f"tales_{'_'.join(target_envs)}"
+    train_wrapper = MultiGeneralEnvironmentManager(train_managers, combo_name, config=config, scheduler_cfg=scheduler_cfg, mode="train")
+    val_wrapper = MultiGeneralEnvironmentManager(val_managers, combo_name + "_val", config=config, scheduler_cfg=scheduler_cfg, mode="val")
+    return train_wrapper, val_wrapper
+
 
 class LifeGateEnvironmentManager(EnvironmentManagerBase):
     # Added config because it is annoying to have to go into the code to switch values.
@@ -790,9 +1080,11 @@ class WebshopEnvironmentManager(EnvironmentManagerBase):
             # the index of self.tasks[i] in parts
             try:
                 index = parts.index(self.tasks[i])
-                reformatted_obs = " [SEP] ".join(f"'{p}'" for p in parts[index+1:])
-            except:
-                reformatted_obs = text_obs[i]
+            except ValueError as err:
+                raise RuntimeError(
+                    f"Failed to locate task marker '{self.tasks[i]}' in observation for env '{self.env_name}'"
+                ) from err
+            reformatted_obs = " [SEP] ".join(f"'{p}'" for p in parts[index+1:])
 
             postprocess_text_obs.append(reformatted_obs)
 
@@ -974,23 +1266,16 @@ class AppWorldEnvironmentManager(EnvironmentManagerBase):
 def make_envs(config):
     """ Create enviroments """ 
     group_n = int(config.env.rollout.n) if config.env.rollout.n > 0 else 1
+    env_name_lower = config.env.env_name.lower()
     
-    if "tales_" in config.env.env_name.lower():
-        from agent_system.environments.env_package.general_tag import build_general_envs, general_projection
-        
-        # Get the specific environment:
-        target_env = config.env.env_name.split("tales_")[-1]
-        yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/general_tag/configs', f'config.yaml')
-        _envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.train_batch_size, 
-                                       group_n=group_n, main_config=config, is_train=True)
-        _val_envs = build_general_envs(yaml_filepath, seed=config.env.seed, env_num=config.data.val_batch_size, 
-                                           group_n=1, main_config=config, is_train=False)
-        projection_f = partial(general_projection)
-        envs = GeneralEnvironmentManager(_envs, projection_f, target_env, config=config)
-        val_envs = GeneralEnvironmentManager(_val_envs, projection_f, target_env, istrain=False, config=config)
-        return envs, val_envs
+    if env_name_lower.startswith("tales_"):
+        combo_targets = _parse_multi_general_targets(env_name_lower)
+        if combo_targets:
+            return _build_multi_general_envs(config, combo_targets)
+        single_env = config.env.env_name.split("tales_")[-1]
+        return _build_general_env_pair(config, single_env)
     
-    elif 'lifegate' in config.env.env_name.lower():
+    elif 'lifegate' in env_name_lower:
         from agent_system.environments.env_package.lifegate import build_lifegate_envs, lifegate_projection
 
         yaml_filepath = os.path.join(os.path.dirname(__file__), 'env_package/lifegate/configs/config.yaml')
@@ -1004,7 +1289,7 @@ def make_envs(config):
         val_envs = LifeGateEnvironmentManager(_val_envs, projection_f, config.env.env_name, istrain=False, config=config)
         return envs, val_envs
     
-    elif "gym_cards" in config.env.env_name.lower():
+    elif "gym_cards" in env_name_lower:
         from agent_system.environments.env_package.gym_cards import build_gymcards_envs, gym_projection
         _envs = build_gymcards_envs(env_name=config.env.env_name, seed=config.env.seed, env_num=config.data.train_batch_size, group_n=group_n, is_train=True)
         _val_envs = build_gymcards_envs(env_name=config.env.env_name, seed=config.env.seed + 1000, env_num=config.data.val_batch_size, group_n=1, is_train=False)
@@ -1014,7 +1299,7 @@ def make_envs(config):
         val_envs = GymCardEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
     
-    elif "alfworld" in config.env.env_name.lower():
+    elif "alfworld" in env_name_lower:
         from agent_system.environments.env_package.alfworld import build_alfworld_envs, alfworld_projection
         if config.env.env_name == 'alfworld/AlfredThorEnv':
             alf_config_path = os.path.join(os.path.dirname(__file__), 'env_package/alfworld/configs/config_tw.yaml')
@@ -1034,7 +1319,7 @@ def make_envs(config):
         val_envs = AlfWorldEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
     
-    elif "sokoban" in config.env.env_name.lower():
+    elif "sokoban" in env_name_lower:
         from agent_system.environments.env_package.sokoban import build_sokoban_envs, sokoban_projection
         env_kwargs = {
             'dim_room': config.env.sokoban.dim_room,
@@ -1050,7 +1335,7 @@ def make_envs(config):
         val_envs = SokobanEnvironmentManager(_val_envs, projection_f, config.env.env_name)
         return envs, val_envs
     
-    elif "webshop" in config.env.env_name.lower():
+    elif "webshop" in env_name_lower:
         from agent_system.environments.env_package.webshop import build_webshop_envs, webshop_projection
         if config.env.webshop.use_small:
             file_path = os.path.join(os.path.dirname(__file__), 'env_package/webshop/webshop/data/items_shuffle_1000.json')
@@ -1074,7 +1359,7 @@ def make_envs(config):
         time.sleep((config.data.train_batch_size * group_n + config.data.val_batch_size) * 0.1) # wait for the envs to be ready
         return envs, val_envs
     
-    elif "appworld" in config.env.env_name.lower():
+    elif "appworld" in env_name_lower:
         from agent_system.environments.env_package.appworld import build_appworld_envs, appworld_projection
         _envs = build_appworld_envs(dataset_name='train', seed=config.env.seed, env_num=config.data.train_batch_size, group_n=group_n, start_server_id=0)
         _val_envs = build_appworld_envs(dataset_name='test_normal', seed=config.env.seed + 1000, env_num=config.data.val_batch_size, group_n=1, start_server_id=config.data.train_batch_size*group_n)
@@ -1094,154 +1379,282 @@ def make_envs(config):
 # Smoke tests for the various envs
 # ##############################
 if __name__ == "__main__":
-    from omegaconf import OmegaConf
+    try:
+        from omegaconf import OmegaConf
+    except ImportError as err:
+        raise ImportError("OmegaConf is required to run env_manager smoke tests") from err
 
-    def build_min_config(env_name: str):
-        # OmegaConf supports both dot and dict access as used above.
-        return OmegaConf.create({
+    parser = argparse.ArgumentParser(description="Smoke test TALES environments")
+    parser.add_argument("--save-data", action="store_true", help="Dump reset/step records to JSONL")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_outputs"),
+        help="Directory for smoke-test dumps",
+    )
+    args = parser.parse_args()
+
+    sample_outputs_dir = os.path.abspath(args.output_dir)
+    if args.save_data:
+        os.makedirs(sample_outputs_dir, exist_ok=True)
+
+    def _convert_to_serializable(obj):
+        if isinstance(obj, (np.ndarray, np.generic)):
+            return obj.tolist()
+        if isinstance(obj, torch.Tensor):
+            return obj.detach().cpu().tolist()
+        if isinstance(obj, dict):
+            return {k: _convert_to_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_convert_to_serializable(v) for v in obj]
+        if isinstance(obj, (np.integer, np.floating)):
+            return obj.item()
+        return obj
+
+    def _write_step_output(
+        label: str,
+        obs_text: List[Any],
+        rewards,
+        dones,
+        infos: List[Dict[str, Any]],
+        actions: Optional[List[str]] = None,
+        mask: Optional[List[bool]] = None,
+    ):
+        if not args.save_data:
+            return
+        safe_label = label.replace("/", "_")
+        path = os.path.join(sample_outputs_dir, f"{safe_label}_steps.jsonl")
+        num_envs = len(infos)
+        with open(path, "a", encoding="utf-8") as fh:
+            for idx in range(num_envs):
+                if mask and (idx >= len(mask) or not mask[idx]):
+                    continue
+                if actions and idx < len(actions):
+                    if "env_done" in actions[idx]:
+                        continue
+                obs_payload = obs_text[idx] if obs_text and idx < len(obs_text) else None
+                payload = {
+                    "obs": _convert_to_serializable(obs_payload) if obs_payload is not None else None,
+                    "reward": _convert_to_serializable(rewards[idx]),
+                    "done": _convert_to_serializable(dones[idx]),
+                    "info": _convert_to_serializable(infos[idx]),
+                }
+                fh.write(json.dumps(payload) + "\n")
+
+    def _extract_walkthrough(info: Dict[str, Any]) -> List[str]:
+        data = info.get("env_provided", {}).get("extra.walkthrough", [])
+        return data if isinstance(data, list) else []
+
+    def _mutate_gold_path(path: List[str]) -> List[str]:
+        if not path:
+            return []
+        augmented: List[str] = []
+        idx = 0
+        while idx < len(path):
+            rng = random.random()
+            if rng > 0.1:
+                augmented.append(path[idx])
+                idx += 1
+            else:
+                augmented.append("inventory" if rng < 0.05 else "get legal moves")
+        return augmented
+
+    def build_min_config(env_name: str, overrides: Dict[str, Dict[str, Any]] | None = None):
+        """Construct a minimal OmegaConf config with optional section overrides."""
+
+        cfg = OmegaConf.create({
             "env": {
-                "env_name": env_name,         # e.g., 'tales_alfworld' or 'tales_scienceworld'
+                "env_name": env_name,
                 "seed": 42,
-                "rollout": {"n": 1},          # group_n = 1
-                "prompt_template": "base_with_verbs_context", # used by general manager + projection
+                "rollout": {"n": 1},
+                "prompt_template": "base_with_verbs_context",
                 "reward_mode": "goal-only",
                 "max_steps": 50,
                 "tokenizer": "qwen25",
                 "valid_seen": False,
-                "load_env_seeds": True
+                "load_env_seeds": True,
             },
             "data": {
-                "train_batch_size": 16,
-                "val_batch_size": 16,
-                "max_prompt_length": 512*2
+                "train_batch_size": 32,
+                "val_batch_size": 32,
+                "max_prompt_length": 512*2,
             },
             "actor_rollout_ref": {
                 "model": {"path": "models/bert-case"},
-                "actor": {"ppo_max_token_len_per_gpu": 8192}
+                "actor": {"ppo_max_token_len_per_gpu": 8192},
             },
         })
+
+        if overrides:
+            for section, updates in overrides.items():
+                if section not in cfg:
+                    cfg[section] = updates
+                    continue
+                for key, value in updates.items():
+                    cfg[section][key] = value
+        return cfg
 
     def close_quietly(manager):
         if manager is None:
             return
+        first_error: Optional[Exception] = None
         for closer in (
             lambda m: getattr(m, "close", None) and m.close(),
             lambda m: hasattr(m, "envs") and getattr(m.envs, "close", None) and m.envs.close(),
         ):
             try:
                 closer(manager)
-            except Exception:
-                pass
+            except Exception as err:
+                if first_error is None:
+                    first_error = err
+        if first_error is not None:
+            raise RuntimeError("Environment manager failed to close cleanly") from first_error
 
-    def smoke(env_name: str):
+    def _get_text_obs(obs: Any) -> List[Any]:
+        if isinstance(obs, dict):
+            for key in ("text", "image", "anchor"):
+                if key in obs and obs[key] is not None:
+                    return obs[key]
+            return []
+        return obs
 
-        # First set up our primary envs
-        config = build_min_config(env_name)
-        train_envs, val_envs = make_envs(config)   # this gets done once in our main ppo code
-        envs = val_envs  # manually set so we can test our val envs
+    def _drive_walkthrough(env_manager: EnvironmentManagerBase, env_name: str, label: str) -> None:
+        if env_manager is None:
+            raise RuntimeError(f"[smoke:{label}] missing environment manager")
 
-        # Get absolute path to sample_outputs folder
-        current_file_dir = os.path.dirname(os.path.abspath(__file__))
-        sample_outputs_dir = os.path.join(current_file_dir, 'sample_outputs')
-        os.makedirs(sample_outputs_dir, exist_ok=True)
-        
-        def write_step_output(filename, obs, rewards, dones, infos):
-            """Write step output to JSONL file - one line per environment instance"""
-            filepath = os.path.join(sample_outputs_dir, filename)
-            
-            def convert_to_serializable(obj):
-                """Recursively convert numpy/torch types to native Python types"""
-                if isinstance(obj, (np.ndarray, np.generic)):
-                    return obj.tolist()
-                elif isinstance(obj, torch.Tensor):
-                    return obj.detach().cpu().numpy().tolist()
-                elif isinstance(obj, dict):
-                    return {k: convert_to_serializable(v) for k, v in obj.items()}
-                elif isinstance(obj, (list, tuple)):
-                    return [convert_to_serializable(item) for item in obj]
-                elif isinstance(obj, (np.integer, np.floating)):
-                    return obj.item()
-                elif hasattr(obj, 'item'):  # numpy scalar
-                    return obj.item()
+        loops = steps = 0
+        completed: Dict[str, int] = defaultdict(int)
+        start_time = time.time()
+
+        def _remaining_workers(manager: EnvironmentManagerBase) -> int:
+            if isinstance(manager, MultiGeneralEnvironmentManager):
+                return sum(_remaining_workers(child) for child in manager.managers)
+            backend = getattr(manager, "envs", None)
+            workers = getattr(backend, "workers", None)
+            if workers:
+                try:
+                    return len(workers)  # type: ignore[arg-type]
+                except TypeError:
+                    return int(bool(workers))
+            has_capacity = getattr(backend, "has_capacity", None)
+            if callable(has_capacity) and has_capacity():
+                return 1
+            return 0
+
+        while _remaining_workers(env_manager):
+            loop_start = time.time()
+            obs, infos = env_manager.reset()
+            text_obs = _get_text_obs(obs)
+            if not text_obs:
+                if loops == 0:
+                    raise RuntimeError(f"[smoke:{label}] reset returned zero environments")
+                if not _remaining_workers(env_manager):
+                    break
+                continue
+
+            loops += 1
+            run_info = infos[0].get("run_info", {}) if infos else {}
+            active_env = run_info.get("env_name", env_name)
+            current_label = run_info.get("label", label)
+
+            default_max_steps = 50
+            cfg = getattr(env_manager, "config", None)
+            env_section = None
+            if cfg is not None:
+                env_section = cfg.get("env") if isinstance(cfg, dict) else getattr(cfg, "env", None)
+            if env_section is not None:
+                if isinstance(env_section, dict):
+                    default_max_steps = int(env_section.get("max_steps", default_max_steps))
                 else:
-                    return obj
-            
-            # obs is a dict with 'text', 'image', 'anchor' keys, each containing lists
-            # rewards, dones are lists/arrays
-            # infos is a list of dicts
-            # obs_text = obs.get('text', None)
-            obs_text = obs
-            
-            # Determine the number of environments
-            num_envs = len(infos)
-            
-            with open(filepath, 'a') as f:
-                # Zip together each environment's data and write one line per env
-                for i in range(num_envs):
-                    output = {
-                        'obs': convert_to_serializable(obs_text[i]) if obs_text is not None else None,
-                        'reward': convert_to_serializable(rewards[i]),
-                        'done': convert_to_serializable(dones[i]),
-                        'info': convert_to_serializable(infos[i])
-                    }
-                    f.write(json.dumps(output) + '\n')
-        
-        try:
-            # for batch_num in range(1):
-            while len(envs.envs.workers) > 0:
-                obs, infos = envs.reset()
-                gold_paths = [inf['env_provided']['extra.walkthrough'] for inf in infos]
+                    default_max_steps = int(getattr(env_section, "max_steps", default_max_steps))
+            max_steps = int(run_info.get("max_steps", default_max_steps))
+            start_offset = 1 if active_env in ("tales_twx", "twx") else 0
 
-                for g_idx, g in enumerate(gold_paths):
-                    new_g = []
-                    seen_g = 0
-                    attempt_g = 0
-                    while seen_g < len(g):
-                        attempt_g += 1
-                        rng = random.random()
-                        if rng > 0.2:
-                            new_g.append(g[seen_g])
-                            seen_g += 1
-                        else:
-                            if rng < 0.1:
-                                new_g.append(f"inventory")   # Doing this to ensure the model learns to use inventory call thru synth data
-                            else:
-                                new_g.append("get legal moves")
-                    gold_paths[g_idx] = new_g
+            gold_paths = [_mutate_gold_path(_extract_walkthrough(info)) for info in infos]
+            finished = [False] * len(gold_paths)
 
-                num_envs = len(envs.envs.workers)
-                finished = [False] * num_envs
-                
-                start_step = 1 if env_name == "tales_twx" else 0
-                for step in range(start_step, 50):
-                    if all(finished):
-                        break  # all envs finished
+            for step in range(start_offset, max_steps):
+                active_mask = [not flag for flag in finished]
+                if not any(active_mask):
+                    break
 
-                    text_actions = [f"<action>{g[step]}</action>" if step < len(g) else "<action>env_done</action>" for g in gold_paths]
-                    obs, rewards, dones, infos = envs.step(text_actions)
+                actions = [
+                    "<action>env_done</action>"
+                    if not active_mask[idx] or step >= len(path)
+                    else f"<action>{path[step]}</action>"
+                    for idx, path in enumerate(gold_paths)
+                ]
 
-                    keep_mask = []
-                    for i, d in enumerate(dones):
-                        if not finished[i]:
-                            keep_mask.append(True)
-                            if d:
-                                finished[i] = True
-                        else:
-                            keep_mask.append(False)
+                next_obs, rewards, dones, step_infos = env_manager.step(actions)
+                steps += 1
+                obs_text = _get_text_obs(next_obs)
 
-                    print(f"{step:>3}: {sum(keep_mask)}")
-                    filtered_obs   = [x for x, keep in zip(obs['text'], keep_mask) if keep]
-                    filtered_rews  = [x for x, keep in zip(rewards,       keep_mask) if keep]
-                    filtered_infos = [x for x, keep in zip(infos,         keep_mask) if keep]
-                    filtered_dones = [x for x, keep in zip(dones,         keep_mask) if keep]
+                for idx, done_flag in enumerate(dones):
+                    if active_mask[idx] and bool(done_flag):
+                        finished[idx] = True
 
-                    if filtered_obs:
-                        write_step_output(f'{env_name}_valid.jsonl', filtered_obs, filtered_rews, filtered_dones, filtered_infos)
-        finally:
-            close_quietly(envs)
-            close_quietly(val_envs)
-        print(f"[smoke] Done {env_name}")
+                _write_step_output(
+                    current_label,
+                    obs_text,
+                    rewards,
+                    dones,
+                    step_infos,
+                    actions,
+                    mask=active_mask,
+                )
 
-    # for name in (["tales_alfworld", "tales_twx"]):
-    for name in (["tales_twx"]):
-        smoke(name)
+            completed_key = current_label or active_env
+            completed[completed_key] += sum(1 for flag in finished if flag)
+
+            loop_elapsed = time.time() - loop_start
+            print(
+                f"[smoke:{current_label:>27}] turn={loops:<3} completed={completed[completed_key]:<3} "
+                f"step_elapsed={loop_elapsed:.1f}s"
+            )
+
+        elapsed = time.time() - start_time
+        summary = ", ".join(f"{env}:{count}" for env, count in completed.items()) or "none"
+        print(
+            f"[smoke:{label:>27}] loops={loops:<3} steps={steps:<3} completed_envs={summary:<3} elapsed={elapsed:.1f}s"
+        )
+
+    def _build_smoke_combo(role: str, entries: List[Dict[str, Any]]) -> MultiGeneralEnvironmentManager:
+        managers: List[GeneralEnvironmentManager] = []
+        metadata: List[Dict[str, Any]] = []
+        for entry in entries:
+            config = build_min_config(entry["env_name"], entry.get("overrides"))
+            train_manager, val_manager = make_envs(config)
+            if role == "train":
+                managers.append(train_manager)
+                metadata.append({
+                    "label": entry["label"],
+                    "max_steps": entry["max_steps"],
+                })
+                close_quietly(val_manager)
+            else:
+                managers.append(val_manager)
+                metadata.append({
+                    "label": entry["label"],
+                    "max_steps": entry["max_steps"],
+                })
+                close_quietly(train_manager)
+        combo_name = f"smoke_{role}_combo"
+        return MultiGeneralEnvironmentManager(managers, combo_name, env_metadata=metadata)
+
+    # --- Smoke execution plan -------------------------------------------------
+    from agent_system.environments.env_package.general_tag.configs.smoke_suite import SMOKE_MULTI_SUITE
+
+    train_combo = _build_smoke_combo("train", SMOKE_MULTI_SUITE["train"])
+    # val_combo = _build_smoke_combo("val", SMOKE_MULTI_SUITE["val"])
+
+    try:
+        print("[smoke] Running multi-env TALES training combo (twx + alfworld)")
+        _drive_walkthrough(train_combo, "smoke_train", "smoke/train_combo")
+
+        # print("[smoke] Running multi-env TALES validation combo (twx + alfworld seen/unseen)")
+        # _drive_walkthrough(val_combo, "smoke_val", "smoke/val_combo")
+    finally:
+        close_quietly(train_combo)
+        # close_quietly(val_combo)
+
+    print("[smoke] Completed TALES multi-env suite")

@@ -213,31 +213,27 @@ class GeneralEnvs(gym.Env):
         
         eval_dataset = env_kwargs.get('eval_dataset', 'eval_in_distribution')
 
-        config = load_config_file(general_config_path)
-        self.env_type = config['env']['type']
+        self.config = load_config_file(general_config_path)
+        self.env_type = self.config['env']['type']
         self.main_config = main_config
 
         # base_env is a 'GeneralTWEnv'
-        base_env = get_environment(self.env_type)(config, train_eval='train' if is_train else 'test', main_config = main_config)
+        self.base_env = get_environment(self.env_type)(self.config, train_eval='train' if is_train else 'test', main_config = main_config)
 
         # 'base_env.game_files' gives us our seeds we'll manage:
         #     - For twx this is a list of ints (seeds)
         #     - For alfworld this is a list of files (pddl)
-        self.max_seed_idx = len(base_env.game_files)
+        self.max_seed_idx = len(self.base_env.game_files)
         self.cur_seed_idx = 0
-        self.seeds = base_env.game_files
+        self.seeds = self.base_env.game_files
 
         self.multi_modal = False
         self.num_processes = env_num * group_n
         self.group_n = group_n
 
         # Create Ray remote actors instead of processes
-        self.workers = []
-        for i in range(self.num_processes):
-            worker = GeneralWorker.remote(config, base_env)
-            self.workers.append(worker)
-
-        self.prev_admissible_commands = [None for _ in range(len(self.workers))]
+        # self.launch_workers()
+        self.prev_admissible_commands = [None for _ in range(self.num_processes)]
 
     def step(self, actions):
         assert len(actions) == len(self.workers), \
@@ -312,8 +308,25 @@ class GeneralEnvs(gym.Env):
         print(msgs)
 
     def close(self):
+        if not hasattr(self, "workers"):
+            return
         for worker in self.workers:
             ray.kill(worker)
+        self.workers = []
+        self.prev_admissible_commands = []
+
+    def launch_workers(self):
+        self.workers = []
+        for _ in range(self.num_processes):
+            worker = GeneralWorker.remote(self.config, self.base_env)
+            self.workers.append(worker)
+        self.prev_admissible_commands = [None for _ in range(len(self.workers))]
+
+    def has_capacity(self) -> bool:
+        workers = getattr(self, "workers", None)
+        if workers:
+            return True
+        return int(self.cur_seed_idx) < self.max_seed_idx
 
 
 def build_general_envs(general_config_path, seed, env_num, group_n, is_train=True, main_config = None, env_kwargs={}):

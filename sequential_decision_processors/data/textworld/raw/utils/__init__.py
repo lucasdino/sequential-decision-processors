@@ -5,3 +5,4 @@ from .userplay_util import clean_obs_cooking, instantiate_textworld_cooking_game
 from .exceptions import NoFurtherGenerations
 
 from .twx_env import TWXBatchGym
+from .alfworld_env import AlfworldResetEnv, AlfredDemangler
