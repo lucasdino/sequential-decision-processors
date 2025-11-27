@@ -30,7 +30,7 @@ DATA_DIR=${PROJ_DIR}/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=${DATA_DIR}/text/train.parquet
 VAL_PARQUET=${DATA_DIR}/text/test.parquet
-REJ_SAMPLING_ROOT=${PROJ_DIR}/rej_sampling_data
+DATA_OUT_DIR=${PROJ_DIR}/rej_sampling_data
 
 # ##############################
 # Main training args
@@ -46,6 +46,7 @@ load_env_seeds=True
 model_path=Qwen/Qwen3-32B
 run_type=rejection_sampling
 wandb_project_name=sdp_alfworld_rejsampling
+experiment_name=q32b-11-26-rft-all
 train_prompt_bsz=64
 val_prompt_bsz=64
 rollout_n=1
@@ -59,11 +60,9 @@ save_freq=-1
 test_freq=20
 total_epochs=1
 # One 64-sample batches per environment (twx & alfworld)
-train_steps=6
+train_steps=4
 
-timestamp=$(date +%Y%m%d_%H%M%S)
-rollout_save_dir=${REJ_SAMPLING_ROOT}/${timestamp}
-experiment_name="sdp-q3-8b-rejsampling-tales-combined-${timestamp}"
+rollout_save_dir=${DATA_OUT_DIR}
 mkdir -p "${rollout_save_dir}"
 
 # ##############################

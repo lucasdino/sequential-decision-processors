@@ -36,7 +36,7 @@ command: |-
   alfworld-download -f
 
   cd ..
-  hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
+  # hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
   cd verl_dead_agent
 
   # Run our rejsampling script
