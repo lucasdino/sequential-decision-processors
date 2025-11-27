@@ -1,4 +1,4 @@
-name: sdp-q32b-rejectionsampling-twx
+name: sdp-q32b-rejectionsampling-combined
 image: mosaicml/pytorch
 compute:
     gpus: 8
@@ -12,8 +12,8 @@ integrations:
     project: llm-chess-rejsampling
     entity: lucasdino-ucsd
 env_variables:
-  SH_FILE: "rejsampling_q32b_twx.sh"
-  EXPERIMENT_NAME: "q32b-11-26-twx-rft"
+  SH_FILE: "rejsampling_q32b_combined.sh"
+  EXPERIMENT_NAME: "q32b-11-26-combined-rft"
 command: |-
   # Need to install java for twx
   apt update

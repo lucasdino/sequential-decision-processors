@@ -274,7 +274,6 @@ class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
         managers: List[GeneralEnvironmentManager],
         combo_name: str,
         config=None,
-        scheduler_cfg: Dict[str, Any] | None = None,
         mode: str = "train",
         env_metadata: List[Dict[str, Any]] | None = None,
     ) -> None:
@@ -287,15 +286,8 @@ class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
         self.mode = mode
         self._active_manager: GeneralEnvironmentManager | None = None
         self._active_index: int | None = None
-        self._scheduler_cfg = scheduler_cfg or {}
-        self._sequence = self._build_sequence(self._scheduler_cfg.get("order"))
+        self._sequence = self._build_fixed_sequence()
         self._sequence_ptr = -1
-        self._strategy = self._scheduler_cfg.get("strategy", "round_robin")
-        self._weights = self._normalize_weights(self._scheduler_cfg.get("weights"))
-        if self._strategy == "weighted" and self._weights is None:
-            raise ValueError("multi_env_scheduler.weights must be set when strategy='weighted'")
-        seed = self._scheduler_cfg.get("seed")
-        self._rng = random.Random(seed)
         if env_metadata is None:
             self._env_metadata = [{} for _ in self.managers]
         elif len(env_metadata) != len(self.managers):
@@ -306,34 +298,22 @@ class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
         # Ensure we start without spinning up every worker pool at once
         self._teardown_inactive(None)
 
-    def _build_sequence(self, explicit_order: List[str] | None) -> List[int]:
-        if explicit_order:
-            name_to_idx = {m.env_name: idx for idx, m in enumerate(self.managers)}
-            missing = [name for name in explicit_order if name not in name_to_idx]
-            if missing:
-                raise ValueError(
-                    "Unknown environment names in scheduler sequence: "
-                    + ", ".join(missing)
-                )
-            seq = [name_to_idx[name] for name in explicit_order]
-            if not seq:
-                raise ValueError("Scheduler sequence must reference at least one environment")
-            return seq
-        return list(range(len(self.managers)))
-
-    def _normalize_weights(self, weights: List[float] | None) -> List[float] | None:
-        if not weights:
-            return None
-        if len(weights) != len(self.managers):
-            raise ValueError("weights length must match number of managers")
-        total = float(sum(weights))
-        if total <= 0:
-            raise ValueError("weights must sum to a positive value")
-        return [w / total for w in weights]
+    def _build_fixed_sequence(self) -> List[int]:
+        name_to_idx = {m.env_name: idx for idx, m in enumerate(self.managers)}
+        preferred = ["twx", "alfworld"]
+        sequence: List[int] = []
+        for env_name in preferred:
+            idx = name_to_idx.get(env_name)
+            if idx is not None and idx not in sequence:
+                sequence.append(idx)
+        for idx in range(len(self.managers)):
+            if idx not in sequence:
+                sequence.append(idx)
+        if not sequence:
+            raise ValueError("Scheduler sequence must reference at least one environment")
+        return sequence
 
     def _select_next_index(self) -> int:
-        if self._strategy == "weighted" and self._weights is not None:
-            return self._rng.choices(range(len(self.managers)), weights=self._weights, k=1)[0]
         self._sequence_ptr = (self._sequence_ptr + 1) % len(self._sequence)
         return self._sequence[self._sequence_ptr]
 
@@ -530,7 +510,7 @@ def _resolve_scheduler_cfg(config) -> Dict[str, Any]:
 
 def _build_multi_general_envs(config, target_envs: List[str]):
     scheduler_cfg = _resolve_scheduler_cfg(config)
-    env_overrides = scheduler_cfg.pop("env_overrides", None)
+    env_overrides = scheduler_cfg.get("env_overrides") if scheduler_cfg else None
     train_managers = []
     val_managers = []
     for env_key in target_envs:
@@ -540,8 +520,8 @@ def _build_multi_general_envs(config, target_envs: List[str]):
         train_managers.append(train_env)
         val_managers.append(val_env)
     combo_name = f"tales_{'_'.join(target_envs)}"
-    train_wrapper = MultiGeneralEnvironmentManager(train_managers, combo_name, config=config, scheduler_cfg=scheduler_cfg, mode="train")
-    val_wrapper = MultiGeneralEnvironmentManager(val_managers, combo_name + "_val", config=config, scheduler_cfg=scheduler_cfg, mode="val")
+    train_wrapper = MultiGeneralEnvironmentManager(train_managers, combo_name, config=config, mode="train")
+    val_wrapper = MultiGeneralEnvironmentManager(val_managers, combo_name + "_val", config=config, mode="val")
     return train_wrapper, val_wrapper
 
 

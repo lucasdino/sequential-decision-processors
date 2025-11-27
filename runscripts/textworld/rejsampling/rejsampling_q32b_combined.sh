@@ -30,7 +30,7 @@ DATA_DIR=${PROJ_DIR}/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=${DATA_DIR}/text/train.parquet
 VAL_PARQUET=${DATA_DIR}/text/test.parquet
-REJ_SAMPLING_ROOT=${PROJ_DIR}/rej_sampling_data/combined
+REJ_SAMPLING_ROOT=${PROJ_DIR}/rej_sampling_data
 
 # ##############################
 # Main training args
@@ -42,26 +42,28 @@ alfworld_max_steps=25
 prompt_template=base_with_verbs_context
 tokenizer_type=qwen3
 valid_seen=False
-load_env_seeds=False
+load_env_seeds=True
 model_path=Qwen/Qwen3-32B
+run_type=rejection_sampling
 wandb_project_name=sdp_alfworld_rejsampling
 train_prompt_bsz=64
 val_prompt_bsz=64
+rollout_n=1
 max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 2))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
-micro_bs_per_gpu=$((32 / (num_nodes * 8)))
+micro_bs_per_gpu=$((64 / (num_nodes * 8)))
 num_cpus_per_env_worker=0.25
 save_freq=-1
 test_freq=20
-total_epochs=10
-# Two 64-sample batches per environment (twx & alfworld)
-train_steps=4
+total_epochs=1
+# One 64-sample batches per environment (twx & alfworld)
+train_steps=6
 
 timestamp=$(date +%Y%m%d_%H%M%S)
 rollout_save_dir=${REJ_SAMPLING_ROOT}/${timestamp}
-experiment_name="sdp-q25-32b-rejsampling-tales-combined-${timestamp}"
+experiment_name="sdp-q3-8b-rejsampling-tales-combined-${timestamp}"
 mkdir -p "${rollout_save_dir}"
 
 # ##############################
@@ -70,8 +72,8 @@ mkdir -p "${rollout_save_dir}"
 uv run -m examples.data_preprocess.prepare \
     --mode 'text' \
     --local_dir ${DATA_DIR} \
-    --train_data_size ${train_prompt_bsz} \
-    --val_data_size ${val_prompt_bsz}
+    --train_data_size 1024 \
+    --val_data_size 128
 
 # ##############################
 # Single UV run covering both envs via multi-env manager
@@ -125,29 +127,27 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.free_cache_engine=False \
     actor_rollout_ref.actor.fsdp_config.fsdp_size=8 \
-    actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
-    actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
+    +actor_rollout_ref.actor.fsdp_config.sharding_strategy="HYBRID_SHARD" \
+    +actor_rollout_ref.actor.fsdp_config.backward_prefetch="BACKWARD_PRE" \
     \
     env.env_name=${env_name} \
     env.seed=${env_seed} \
     env.max_steps=${twx_max_steps} \
-    env.multi_env_scheduler.order=[twx, alfworld] \
-    env.multi_env_scheduler.strategy=round_robin \
-    env.multi_env_scheduler.env_overrides.twx.max_steps=${twx_max_steps} \
-    env.multi_env_scheduler.env_overrides.alfworld.max_steps=${alfworld_max_steps} \
-    env.rollout.n=1 \
-    env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
-    env.prompt_template=${prompt_template} \
-    env.reward_mode="goal-only" \
-    env.num_envs_per_batch=1 \
-    env.tokenizer=${tokenizer_type} \
-    env.valid_seen=${valid_seen} \
-    env.load_env_seeds=${load_env_seeds} \
+    env.rollout.n=${rollout_n} \
+    +env.multi_env_scheduler.env_overrides.twx.max_steps=${twx_max_steps} \
+    +env.multi_env_scheduler.env_overrides.alfworld.max_steps=${alfworld_max_steps} \
+    +env.resources_per_worker.num_cpus=${num_cpus_per_env_worker} \
+    +env.prompt_template=${prompt_template} \
+    +env.reward_mode="goal-only" \
+    +env.num_envs_per_batch=${rollout_n} \
+    +env.tokenizer=${tokenizer_type} \
+    +env.valid_seen=${valid_seen} \
+    +env.load_env_seeds=${load_env_seeds} \
     \
-    intermediary.enabled=False \
+    +intermediary.enabled=False \
     \
-    trainer.run_type='rejection_sampling' \
-    trainer.rollout_data_dir=${rollout_save_dir} \
+    +trainer.run_type=${run_type} \
+    +trainer.rollout_data_dir=${rollout_save_dir} \
     trainer.total_training_steps=${train_steps} \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \

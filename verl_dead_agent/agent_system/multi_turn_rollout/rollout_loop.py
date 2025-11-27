@@ -331,6 +331,10 @@ class TrajectoryCollector:
         """
         # Initial observations from the environment
         obs, infos = envs.reset()
+        
+        # Print env name AFTER reset() since reset() switches the active environment in multi-env managers
+        env_name = getattr(envs, "current_env_name", getattr(envs, "env_name", "unknown"))
+        print(f"[rollout] Rolling out env: {env_name}")
 
         # Initialize trajectory collection
         lenght_obs = len(obs['text']) if obs['text'] is not None else len(obs['image'])
