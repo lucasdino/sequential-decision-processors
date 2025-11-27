@@ -30,6 +30,11 @@ class EnvironmentManagerBase:
         self.projection_f = projection_f
         self.env_name = env_name
 
+    @property
+    def num_env_types(self) -> int:
+        """Return the number of distinct environment types. For single-env managers, this is 1."""
+        return 1
+
     def reset(self) -> Dict[str, Any]:
         """
         Reset all environments and return the initial observations.

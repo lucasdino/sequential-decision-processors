@@ -344,6 +344,11 @@ class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
             return None
         return self._active_manager.env_name
 
+    @property
+    def num_env_types(self) -> int:
+        """Return the number of distinct environment types in this multi-env manager."""
+        return len(self.managers)
+
     def reset(self):  # type: ignore[override]
         next_idx = self._select_next_index()
         self._set_active_manager(next_idx)
@@ -516,9 +521,29 @@ def _build_multi_general_envs(config, target_envs: List[str]):
     for env_key in target_envs:
         env_specific = _clone_config_with_env_name(config, f"tales_{env_key}")
         _apply_env_overrides(env_specific, env_key, env_overrides)
-        train_env, val_env = _build_general_env_pair(env_specific, env_key)
-        train_managers.append(train_env)
-        val_managers.append(val_env)
+        
+        if env_key == 'alfworld':
+            # For alfworld, create separate seen and unseen validation envs
+            train_env, _ = _build_general_env_pair(env_specific, env_key)
+            train_managers.append(train_env)
+            
+            # Create seen (valid_seen=True) val env
+            config_seen = _clone_config_with_env_name(config, f"tales_{env_key}")
+            _apply_env_overrides(config_seen, env_key, env_overrides)
+            config_seen.env.valid_seen = True
+            _, val_seen = _build_general_env_pair(config_seen, 'alfworld_seen')
+            val_managers.append(val_seen)
+            
+            # Create unseen (valid_seen=False) val env
+            config_unseen = _clone_config_with_env_name(config, f"tales_{env_key}")
+            _apply_env_overrides(config_unseen, env_key, env_overrides)
+            config_unseen.env.valid_seen = False
+            _, val_unseen = _build_general_env_pair(config_unseen, 'alfworld_unseen')
+            val_managers.append(val_unseen)
+        else:
+            train_env, val_env = _build_general_env_pair(env_specific, env_key)
+            train_managers.append(train_env)
+            val_managers.append(val_env)
     combo_name = f"tales_{'_'.join(target_envs)}"
     train_wrapper = MultiGeneralEnvironmentManager(train_managers, combo_name, config=config, mode="train")
     val_wrapper = MultiGeneralEnvironmentManager(val_managers, combo_name + "_val", config=config, mode="val")
