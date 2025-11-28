@@ -3,6 +3,7 @@
 outputs/
 models/
 llm_chess/
+runscripts/setups
 
 # games
 tw_games
@@ -25,7 +26,6 @@ token_stats/
 
 # local uv dirs to ignore
 .venv/
-remote.txt
 llamafactory.egg-info/
 
 # local dirs to ignore
