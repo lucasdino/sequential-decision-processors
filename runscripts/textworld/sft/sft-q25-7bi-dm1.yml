@@ -22,18 +22,9 @@ command: |-
   mkdir home
   cd home
   git clone --recurse-submodules https://github.com/lucasdino/sequential-decision-processors.git
-  cd sequential-decision-processors
-  git reset --hard HEAD
-  git clean -fd
-  git pull origin main
-  sleep 20
-  
-  pip install uv
-  uv venv .venv
-  source .venv/bin/activate
-  pip install -e .
+  cd sequential-decision-processors/sequential_decision_processors
 
-  sleep 3
+  pip install -e .
   apt-get update && apt-get install -y libgl1-mesa-glx
   pip install opencv-python==4.5.4.60
   pip uninstall opencv-python -y
@@ -43,12 +34,11 @@ command: |-
   # ------------------------------
   # Generate our dataset
   # ------------------------------
-  aws s3 sync $S3_DATASET_PATH sequential_decision_processors/data
+  aws s3 sync $S3_DATASET_PATH data
 
   # ------------------------------
   # Download and install llamafactory
   # ------------------------------
-  cd sequential_decision_processors
   git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
   cd LLaMA-Factory
   pip install -e ".[torch,metrics]"
