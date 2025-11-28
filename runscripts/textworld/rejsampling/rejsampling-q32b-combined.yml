@@ -45,4 +45,4 @@ command: |-
 
   # Save down rejsample data
   pip install --no-cache-dir awscli
-  aws s3 cp /home/sequential-decision-processors/rej_sampling_data s3://seq-dec-proc/rej_sampling_data/$EXPERIMENT_NAME --recursive
+  aws s3 cp /home/sequential-decision-processors/model_outputs s3://seq-dec-proc/saved_data/$EXPERIMENT_NAME --recursive

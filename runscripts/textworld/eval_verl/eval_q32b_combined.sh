@@ -30,7 +30,7 @@ DATA_DIR=${PROJ_DIR}/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=${DATA_DIR}/text/train.parquet
 VAL_PARQUET=${DATA_DIR}/text/test.parquet
-DATA_OUT_DIR=${PROJ_DIR}/eval_outputs
+DATA_OUT_DIR=${PROJ_DIR}/model_outputs
 
 # ##############################
 # Main training args

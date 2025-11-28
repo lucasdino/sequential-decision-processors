@@ -759,6 +759,10 @@ class RayPPOTrainer:
         sample_inputs = []
         sample_outputs = []
         sample_scores = []
+        
+        # Lists to collect extra info for saving (same as rejection sampling)
+        sample_step_infos = []
+        sample_run_infos = []
 
         # Determine how many environment types we have (for multi-env scenarios)
         num_env_types = getattr(self.val_envs, 'num_env_types', 1)
@@ -848,6 +852,14 @@ class RayPPOTrainer:
                 reward_tensor = result["reward_tensor"]
                 scores = reward_tensor.sum(-1).cpu().tolist()
                 sample_scores.extend(scores)
+                
+                # Collect step_info and run_info for saving (same as rejection sampling)
+                env_infos = test_batch.non_tensor_batch.get("step_info", None)
+                run_infos = test_batch.non_tensor_batch.get("run_info", None)
+                if env_infos is not None:
+                    sample_step_infos.extend(env_infos.tolist() if hasattr(env_infos, "tolist") else list(env_infos))
+                if run_infos is not None:
+                    sample_run_infos.extend(run_infos.tolist() if hasattr(run_infos, "tolist") else list(run_infos))
 
                 reward_tensor_lst.append(reward_tensor)
                 data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
@@ -873,6 +885,23 @@ class RayPPOTrainer:
                             assert test_batch.non_tensor_batch[k][0] == test_batch.non_tensor_batch[k][i], f'not all success_rate are the same, 0: {test_batch.non_tensor_batch[k][0]}, {i}: {test_batch.non_tensor_batch[k][i]}'
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
+        
+        # Save validation outputs to file (same format as rejection sampling)
+        rollout_data_dir = self.config.trainer.get("rollout_data_dir", None)
+        if rollout_data_dir:
+            val_dump_path = os.path.join(rollout_data_dir, "validation")
+            reward_extra_infos_dict = {}
+            if len(sample_step_infos) == len(sample_inputs):
+                reward_extra_infos_dict["env_info"] = sample_step_infos
+            if len(sample_run_infos) == len(sample_inputs):
+                reward_extra_infos_dict["run_info"] = sample_run_infos
+            self._dump_generations(
+                inputs=sample_inputs,
+                outputs=sample_outputs,
+                scores=sample_scores,
+                reward_extra_infos_dict=reward_extra_infos_dict,
+                dump_path=val_dump_path,
+            )
 
         reward_tensor = torch.cat(reward_tensor_lst, dim=0).sum(-1).cpu()  # (batch_size,)
         data_sources = np.concatenate(data_source_lst, axis=0)

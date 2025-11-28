@@ -30,7 +30,7 @@ DATA_DIR=${PROJ_DIR}/data/verl-agent
 ENGINE=${1:-vllm}
 TRAIN_PARQUET=${DATA_DIR}/text/train.parquet
 VAL_PARQUET=${DATA_DIR}/text/test.parquet
-DATA_OUT_DIR=${PROJ_DIR}/rej_sampling_data
+DATA_OUT_DIR=${PROJ_DIR}/model_outputs
 
 # ##############################
 # Main training args
@@ -59,7 +59,7 @@ num_cpus_per_env_worker=0.25
 save_freq=-1
 test_freq=20
 total_epochs=1
-# One 64-sample batches per environment (twx & alfworld)
+# Each train step is a single 64-sample batches per environment (so two steps for twx and two steps for alfworld)
 train_steps=4
 
 rollout_save_dir=${DATA_OUT_DIR}
