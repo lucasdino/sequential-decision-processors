@@ -1,0 +1,50 @@
+name: sdp-q25-sft-dm3-eval-alltw
+image: mosaicml/pytorch
+compute:
+    gpus: 8
+    cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: wandb
+    project: sdp_textworld_eval
+    entity: lucasdino-ucsd
+env_variables:
+  SH_FILE: "eval-q25-7b-sft-dm3.sh"
+  EXPERIMENT_NAME: "q25-7b-sft-dm3"
+  S3_MODEL_PATH:  "s3://seq-dec-proc/sft_models/sdp_q25_7b_dm3/"
+command: |-
+  # Need to install java for twx
+  apt update
+  apt install -y default-jdk
+
+  # Get env set up on cluster (in /home/...)
+  cd home
+  git clone --recurse-submodules https://github.com/lucasdino/sequential-decision-processors.git
+  cd sequential-decision-processors
+  mv runscripts verl_dead_agent/
+  cd verl_dead_agent
+
+  pip install uv
+  uv venv .venv
+  source .venv/bin/activate
+  uv add wheel packaging
+  uv add flash-attn==2.7.4.post1 --no-build-isolation
+  pip install --no-cache-dir awscli
+
+  # Download our alfworld data
+  alfworld-download -f
+
+  cd ..
+  # hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
+  aws s3 sync $S3_MODEL_PATH "/home/sequential-decision-processors/models/local/"
+  cd verl_dead_agent
+
+  # Run our rejsampling script
+  chmod +x runscripts/*.sh
+  runscripts/textworld/eval_sft/$SH_FILE
+
+  # Save down rejsample data
+  aws s3 cp /home/sequential-decision-processors/model_outputs s3://seq-dec-proc/saved_data/$EXPERIMENT_NAME --recursive
