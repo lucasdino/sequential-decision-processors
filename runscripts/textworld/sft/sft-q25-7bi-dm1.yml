@@ -26,6 +26,7 @@ command: |-
 
   pip install uv
   uv venv .venv
+  source .venv/bin/activate
   uv sync
   apt-get update && apt-get install -y libgl1-mesa-glx
   uv add opencv-python
@@ -64,6 +65,10 @@ command: |-
   --include "tokenizer_config.json" \
   --include "special_tokens_map.json" \
   --include "generation_config.json"
+  --include "chat_template.jinja" \
+  --include "added_tokens.json" \
+  --include "vocab.json" \
+  --include "merges.txt"
 
   echo "Training complete and model saved to S3"
   sleep 45
