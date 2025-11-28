@@ -266,6 +266,9 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                 return  # Exit after finding the first active mask
 
 
+
+# ------------------- Claude Generated -------------------
+
 class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
     """Wrap multiple GeneralEnvironmentManager instances and rotate between them."""
 
@@ -548,6 +551,8 @@ def _build_multi_general_envs(config, target_envs: List[str]):
     train_wrapper = MultiGeneralEnvironmentManager(train_managers, combo_name, config=config, mode="train")
     val_wrapper = MultiGeneralEnvironmentManager(val_managers, combo_name + "_val", config=config, mode="val")
     return train_wrapper, val_wrapper
+
+# ------------------- Claude Generated -------------------
 
 
 class LifeGateEnvironmentManager(EnvironmentManagerBase):
@@ -1457,7 +1462,7 @@ if __name__ == "__main__":
         idx = 0
         while idx < len(path):
             rng = random.random()
-            if rng > 0.1:
+            if rng > 0.8:
                 augmented.append(path[idx])
                 idx += 1
             else:
@@ -1465,28 +1470,50 @@ if __name__ == "__main__":
         return augmented
 
     def build_min_config(env_name: str, overrides: Dict[str, Dict[str, Any]] | None = None):
-        """Construct a minimal OmegaConf config with optional section overrides."""
+        """Construct a minimal OmegaConf config matching the shell script env config."""
+        
+        # Values from rejsampling_q32b_combined.sh
+        env_seed = 42
+        twx_max_steps = 40
+        alfworld_max_steps = 25
+        prompt_template = "base_with_verbs_context"
+        tokenizer_type = "qwen3"
+        valid_seen = False
+        load_env_seeds = False
+        rollout_n = 1
+        max_prompt_length = 512 * 3
+        max_response_length = 512 * 2
+        train_prompt_bsz = 16
+        val_prompt_bsz = 16
 
         cfg = OmegaConf.create({
             "env": {
                 "env_name": env_name,
-                "seed": 42,
-                "rollout": {"n": 1},
-                "prompt_template": "base_with_verbs_context",
+                "seed": env_seed,
+                "max_steps": twx_max_steps,
+                "rollout": {"n": rollout_n},
+                "prompt_template": prompt_template,
                 "reward_mode": "goal-only",
-                "max_steps": 50,
-                "tokenizer": "qwen25",
-                "valid_seen": False,
-                "load_env_seeds": True,
+                "tokenizer": tokenizer_type,
+                "valid_seen": valid_seen,
+                "load_env_seeds": load_env_seeds,
+                "num_envs_per_batch": rollout_n,
+                "multi_env_scheduler": {
+                    "env_overrides": {
+                        "twx": {"max_steps": twx_max_steps},
+                        "alfworld": {"max_steps": alfworld_max_steps},
+                    }
+                },
             },
             "data": {
-                "train_batch_size": 32,
-                "val_batch_size": 32,
-                "max_prompt_length": 512*2,
+                "train_batch_size": train_prompt_bsz,
+                "val_batch_size": val_prompt_bsz,
+                "max_prompt_length": max_prompt_length,
+                "max_response_length": max_response_length,
             },
             "actor_rollout_ref": {
-                "model": {"path": "models/bert-case"},
-                "actor": {"ppo_max_token_len_per_gpu": 8192},
+                "model": {"path": "Qwen/Qwen3-32B"},
+                "actor": {"ppo_max_token_len_per_gpu": max_prompt_length + max_response_length},
             },
         })
 
@@ -1608,13 +1635,21 @@ if __name__ == "__main__":
                     mask=active_mask,
                 )
 
+                # Track longest action in this step
+                active_actions = [a for idx, a in enumerate(actions) if active_mask[idx]]
+                max_action_len = max((len(a) for a in active_actions), default=0)
+                print(
+                    f"[smoke:{current_label:>27}] turn={loops:<3} step={step:<3} "
+                    f"max_action_len={max_action_len:<4} active={sum(active_mask)}"
+                )
+
             completed_key = current_label or active_env
             completed[completed_key] += sum(1 for flag in finished if flag)
 
             loop_elapsed = time.time() - loop_start
             print(
                 f"[smoke:{current_label:>27}] turn={loops:<3} completed={completed[completed_key]:<3} "
-                f"step_elapsed={loop_elapsed:.1f}s"
+                f"loop_elapsed={loop_elapsed:.1f}s"
             )
 
         elapsed = time.time() - start_time
@@ -1629,19 +1664,15 @@ if __name__ == "__main__":
         for entry in entries:
             config = build_min_config(entry["env_name"], entry.get("overrides"))
             train_manager, val_manager = make_envs(config)
+            # Get max_steps from config (already has env-specific overrides applied)
+            max_steps = config.env.max_steps
             if role == "train":
                 managers.append(train_manager)
-                metadata.append({
-                    "label": entry["label"],
-                    "max_steps": entry["max_steps"],
-                })
+                metadata.append({"label": entry["label"], "max_steps": max_steps})
                 close_quietly(val_manager)
             else:
                 managers.append(val_manager)
-                metadata.append({
-                    "label": entry["label"],
-                    "max_steps": entry["max_steps"],
-                })
+                metadata.append({"label": entry["label"], "max_steps": max_steps})
                 close_quietly(train_manager)
         combo_name = f"smoke_{role}_combo"
         return MultiGeneralEnvironmentManager(managers, combo_name, env_metadata=metadata)
@@ -1649,17 +1680,17 @@ if __name__ == "__main__":
     # --- Smoke execution plan -------------------------------------------------
     from agent_system.environments.env_package.general_tag.configs.smoke_suite import SMOKE_MULTI_SUITE
 
-    train_combo = _build_smoke_combo("train", SMOKE_MULTI_SUITE["train"])
-    # val_combo = _build_smoke_combo("val", SMOKE_MULTI_SUITE["val"])
+    # train_combo = _build_smoke_combo("train", SMOKE_MULTI_SUITE["train"])
+    val_combo = _build_smoke_combo("val", SMOKE_MULTI_SUITE["val"])
 
     try:
-        print("[smoke] Running multi-env TALES training combo (twx + alfworld)")
-        _drive_walkthrough(train_combo, "smoke_train", "smoke/train_combo")
+        # print("[smoke] Running multi-env TALES training combo (twx + alfworld)")
+        # _drive_walkthrough(train_combo, "smoke_train", "smoke/train_combo")
 
-        # print("[smoke] Running multi-env TALES validation combo (twx + alfworld seen/unseen)")
-        # _drive_walkthrough(val_combo, "smoke_val", "smoke/val_combo")
+        print("[smoke] Running multi-env TALES validation combo (twx + alfworld seen/unseen)")
+        _drive_walkthrough(val_combo, "smoke_val", "smoke/val_combo")
     finally:
-        close_quietly(train_combo)
-        # close_quietly(val_combo)
+        # close_quietly(train_combo)
+        close_quietly(val_combo)
 
     print("[smoke] Completed TALES multi-env suite")

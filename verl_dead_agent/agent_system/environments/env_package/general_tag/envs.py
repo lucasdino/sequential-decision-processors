@@ -217,6 +217,11 @@ class GeneralEnvs(gym.Env):
         self.env_type = self.config['env']['type']
         self.main_config = main_config
 
+        # Pull max_steps from env_overrides based on env_name (twx or alfworld)
+        env_key = main_config.env.env_name.split('_')[-1]  # tales_twx -> twx, tales_alfworld -> alfworld
+        max_steps = main_config.env.multi_env_scheduler.env_overrides[env_key].max_steps
+        self.config['rl']['training']['max_nb_steps_per_episode'] = int(max_steps)
+
         # base_env is a 'GeneralTWEnv'
         self.base_env = get_environment(self.env_type)(self.config, train_eval='train' if is_train else 'test', main_config = main_config)
 
