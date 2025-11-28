@@ -1,4 +1,4 @@
-name: sdp-textworlds-q25-7b-sft-dm1
+name: sdp-textworlds-q25-7b-sft-dm3
 image: isadoracw/llama-factory-mc:latest
 compute:
     gpus: 8
@@ -12,9 +12,9 @@ integrations:
     project: sdp_textworld_sft
     entity: lucasdino-ucsd
 env_variables:
-  S3_DATASET_PATH:  "s3://seq-dec-proc/sft_data/sft_dm1/"
-  YAML_CONFIG_FILE: "tasks/training_configs/llamafactory_sdp_sft_qwen25_dm1.yaml"
-  SAVE_FOLDER_NAME: "sdp_q25_7b_dm1"
+  S3_DATASET_PATH:  "s3://seq-dec-proc/sft_data/sft_dm3/"
+  YAML_CONFIG_FILE: "tasks/training_configs/llamafactory_sdp_sft_qwen25_dm3.yaml"
+  SAVE_FOLDER_NAME: "sdp_q25_7b_dm3"
 command: |-
   # ------------------------------
   # Download/install dependencies

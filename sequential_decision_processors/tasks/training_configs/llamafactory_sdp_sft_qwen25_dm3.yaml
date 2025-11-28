@@ -10,15 +10,14 @@ deepspeed: tasks/training_configs/ds_z3_config.json
 push_to_hub: false
 
 ### dataset
-dataset: llamafactory_sdp_sftdata
+dataset: sdp_sft_data
 template: default
-cutoff_len: 4096
+cutoff_len: 3000
 overwrite_cache: true
 
 ### output
 output_dir: sft-model
 logging_steps: 10
-save_strategy: epoch
 save_total_limit: 1
 overwrite_output_dir: true
 
