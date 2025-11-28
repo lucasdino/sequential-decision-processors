@@ -64,7 +64,7 @@ command: |-
   --include "tokenizer.json" \
   --include "tokenizer_config.json" \
   --include "special_tokens_map.json" \
-  --include "generation_config.json"
+  --include "generation_config.json" \
   --include "chat_template.jinja" \
   --include "added_tokens.json" \
   --include "vocab.json" \
