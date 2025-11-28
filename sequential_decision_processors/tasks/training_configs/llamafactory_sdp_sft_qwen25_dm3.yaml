@@ -10,9 +10,9 @@ deepspeed: tasks/training_configs/ds_z3_config.json
 push_to_hub: false
 
 ### dataset
-dataset: llmchess_programmatic
+dataset: llamafactory_sdp_sftdata
 template: default
-cutoff_len: 3000
+cutoff_len: 4096
 overwrite_cache: true
 
 ### output
@@ -34,7 +34,7 @@ ddp_timeout: 180000000
 
 ### reporting
 report_to: wandb
-run_name: sft-qwen25-7b-datamix36
+run_name: sft-q25-7b-dm3
 
 ### eval
 val_size: 0.01

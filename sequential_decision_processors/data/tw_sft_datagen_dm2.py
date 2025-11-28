@@ -14,18 +14,18 @@ DATASET_CONFIG = [
     {
         "name": "mgp",
         "files": ["magpieclean_20k.jsonl"],
-        "weight": 0.5
+        "weight": 0.475
     },
     {
         "name": "rft",
         "files": ["rft_alfworld_906.jsonl", "rft_combined_3327.jsonl", "rft_twx_1178.jsonl"],
-        "weight": 0.5
+        "weight": 0.475
     },
-    # {
-    #     "name": "bestmove",
-    #     "files": ["bestmove_30k.jsonl", "bestmove_30k_copy.jsonl"],
-    #     "weight": 0.0
-    # },
+    {
+        "name": "bestmove",
+        "files": ["bestmove_30k.jsonl", "bestmove_30k_copy.jsonl"],
+        "weight": 0.05
+    },
     # {
     #     "name": "bestline",
     #     "files": ["bestline_4k.jsonl"],
