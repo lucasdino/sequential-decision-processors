@@ -338,13 +338,15 @@ class TrajectoryCollector:
 
         # Initialize trajectory collection
         lenght_obs = len(obs['text']) if obs['text'] is not None else len(obs['image'])
-        if len(gen_batch.batch) != lenght_obs and self.config.env.rollout.n > 0:
+        # Only repeat gen_batch during training; validation should already have the correct batch size
+        if istrain and len(gen_batch.batch) != lenght_obs and self.config.env.rollout.n > 0:
             gen_batch = gen_batch.repeat(repeat_times=self.config.env.rollout.n, interleave=True)
         assert len(gen_batch.batch) == lenght_obs, f"gen_batch size {len(gen_batch.batch)} does not match obs size {lenght_obs}"
 
         # Copying gen batch, initialize trajectory collection:
         if intermediate_gen_batch is not None:
-            if len(intermediate_gen_batch.batch) != lenght_obs and self.config.env.rollout.n > 0:
+            # Only repeat intermediate_gen_batch during training
+            if istrain and len(intermediate_gen_batch.batch) != lenght_obs and self.config.env.rollout.n > 0:
                 intermediate_gen_batch = intermediate_gen_batch.repeat(repeat_times=self.config.env.rollout.n, interleave=True)
             assert len(intermediate_gen_batch.batch) == lenght_obs, f"intermediate_gen_batch size {len(intermediate_gen_batch.batch)} does not match obs size {lenght_obs}"
             

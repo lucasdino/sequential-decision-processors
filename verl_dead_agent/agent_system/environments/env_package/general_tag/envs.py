@@ -265,6 +265,14 @@ class GeneralEnvs(gym.Env):
             rewards_list.append(compute_reward(info, dones[0]))
         return text_obs_list, rewards_list, dones_list, info_list
 
+    def reset_for_validation(self):
+        """
+        Reset the seed index and re-launch workers for a new validation run.
+        Call this at the start of each validation stage to ensure environments are fresh.
+        """
+        self.cur_seed_idx = 0
+        self.launch_workers()
+
     def reset(self):
         """
         Send the reset command to all workers at once and collect initial obs/info from each environment.

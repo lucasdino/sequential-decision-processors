@@ -765,6 +765,10 @@ class RayPPOTrainer:
         sample_step_infos = []
         sample_run_infos = []
 
+        # Reset validation environments for a fresh validation run
+        if hasattr(self.val_envs, 'reset_for_validation'):
+            self.val_envs.reset_for_validation()
+
         # Determine how many environment types we have (for multi-env scenarios)
         num_env_types = getattr(self.val_envs, 'num_env_types', 1)
         

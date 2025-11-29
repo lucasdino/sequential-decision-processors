@@ -265,6 +265,13 @@ class GeneralEnvironmentManager(EnvironmentManagerBase):
                     self._process_gamefile(gamefile, won_value, success)
                 return  # Exit after finding the first active mask
 
+    def reset_for_validation(self):
+        """
+        Reset the environment for a new validation run.
+        This resets the seed index and re-launches workers.
+        """
+        if hasattr(self.envs, 'reset_for_validation'):
+            self.envs.reset_for_validation()
 
 
 # ------------------- Claude Generated -------------------
@@ -401,6 +408,18 @@ class MultiGeneralEnvironmentManager(EnvironmentManagerBase):
             closer = getattr(backend, "close", None)
             if callable(closer):
                 closer()
+
+    def reset_for_validation(self):
+        """
+        Reset all managed environments for a new validation run.
+        This resets the seed index and re-launches workers for each manager.
+        """
+        # Reset the sequence pointer so we start from the first env again
+        self._sequence_ptr = -1
+        # Reset each manager's environments
+        for manager in self.managers:
+            if hasattr(manager, 'reset_for_validation'):
+                manager.reset_for_validation()
 
 def _to_plain_container(data):
     if isinstance(data, dict):
