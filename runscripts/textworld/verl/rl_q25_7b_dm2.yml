@@ -46,4 +46,5 @@ command: |-
   runscripts/textworld/verl/$SH_FILE
 
   # save down the model
-  aws s3 cp /home/sequential-decision-processors/saved_models s3://seq-dec-proc/rl_models/$EXPERIMENT_NAME --recursive
+  aws s3 cp /home/sequential-decision-processors/saved_models s3://seq-dec-proc/rl_models/$EXPERIMENT_NAME --recursive \
+  --exclude "*/optim/*"
