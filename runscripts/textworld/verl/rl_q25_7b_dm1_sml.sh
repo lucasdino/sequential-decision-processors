@@ -47,7 +47,7 @@ model_path=$PROJ_DIR/models/local
 # model_path=Qwen/Qwen2.5-7B-Instruct
 run_type=train
 wandb_project_name=sdp_textworlds_rl
-experiment_name=q25-7b-dm1-rl-v1
+experiment_name=q25-7b-dm1-rl-v1-small
 train_prompt_bsz=16
 val_prompt_bsz=128
 rollout_n=8
@@ -58,11 +58,11 @@ num_nodes=1
 micro_bs_per_gpu=$((64 / (num_nodes * 8)))
 num_cpus_per_env_worker=0.25
 save_freq=-1
-test_freq=8
+test_freq=2
 total_epochs=1
 checkpoint_dir=${PROJ_DIR}/saved_models
 # Each train step is a single 64-sample batches per environment (so two steps for twx and two steps for alfworld)
-train_steps=32
+train_steps=2
 
 rollout_save_dir=${DATA_OUT_DIR}
 mkdir -p "${rollout_save_dir}"
