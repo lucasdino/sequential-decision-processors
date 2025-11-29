@@ -1,13 +1,14 @@
 REFINEMENT_PROMPT = "Placeholdr"
 
 ALFWORLD_SPEC_INSTRUCTIONS = "\nNote that you must move to an object before you can interact with it. You can use 'inventory' to get your current inventory. You should reference each object by its precise name -- e.g., 'mug 3'."
-TWX_SPEC_INSTRUCTIONS = "\nYou can use 'look around' or 'inventory' to get your current observation and current inventory, respectively. You must first take a knife in order to cut objects. Refer to objects by their base names -- e.g., instead of 'raw chicken leg' us 'chicken leg'. You should roast with the oven, fry with the stove, and grill with the barbecue."
+TWX_SPEC_INSTRUCTIONS = "\nYou can use 'look around' or 'inventory' to get your current observation and current inventory, respectively. You must first take a knife in order to cut objects. Refer to objects by their base names -- e.g., instead of 'raw chicken leg' us 'chicken leg'. You should roast with the oven, fry with the stove, and grill with the barbecue. You must be in the kitchen to prepare your meal."
 
 GENERAL_INSTRUCTIONS_WITH_VERBS = """You are an agent operating in {env_name}, an interactive-fiction, text-world environment.
 You should first reason about your current situation prior to returning your chosen action. You MUST format your thinking as <think> your_reasoning </think> and your action as <action> your_action </action>. 
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
 The set of action templates are the following: {verbs}. You should only use these verbs in your actions. Note that you have a limited inventory size. If you get stuck, you may want to call 'get legal moves'.
+You also have a limited number of moves -- this limit is ample to complete the task but you must be efficient in your actions.
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}
@@ -19,6 +20,7 @@ You should first reason about your current situation prior to returning your cho
 If you do not enclose your reasoning and action within their respective tags, your response will be rejected. You can only provide one action at a time.
 For example, <think> my_thinking... </think> <action> take lantern </action>.{task_spec_info}
 The set of action templates are the following: {verbs}. You should only use these verbs in your actions. Note that you have a limited inventory size. If you get stuck, you may want to call 'get legal moves'.{necessary_context}
+You also have a limited number of moves -- this limit is ample to complete the task but you must be efficient in your actions.
 
 Prior to this step, you have already taken {step_count} step(s). Below are the most recent non-trivial observations and actions you took: 
 {action_history}

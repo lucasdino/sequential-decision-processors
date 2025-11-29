@@ -1,6 +1,5 @@
 # directories not to track
 /data/
-outputs/
 models/
 llm_chess/
 runscripts/setups
@@ -15,6 +14,7 @@ cleaned_data/
 textworld_synthetic/
 train_data/
 
+sequential_decision_processors/data/s3_outputs/
 sequential_decision_processors/data/data_uploads/
 sequential_decision_processors/data/cleaned_sft/
 sequential_decision_processors/data/gold_path
