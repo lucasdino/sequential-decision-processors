@@ -9,7 +9,7 @@ scheduling:
   preemptible: true
 integrations:
   - integration_type: wandb
-    project: llm-chess-rl
+    project: sdp_textworlds_rl
     entity: lucasdino-ucsd
 env_variables:
   SH_FILE: "rl_q25_7b_dm2.sh"
