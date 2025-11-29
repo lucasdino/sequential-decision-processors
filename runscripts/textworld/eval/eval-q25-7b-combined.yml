@@ -41,7 +41,7 @@ command: |-
 
   # Run our rejsampling script
   chmod +x runscripts/*.sh
-  runscripts/textworld/eval_verl/$SH_FILE
+  runscripts/textworld/eval/$SH_FILE
 
   # Save down rejsample data
   pip install --no-cache-dir awscli

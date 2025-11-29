@@ -48,8 +48,8 @@ model_path=$PROJ_DIR/models/local
 run_type=train
 wandb_project_name=sdp_textworlds_rl
 experiment_name=q25-7b-dm1-rl-v1
-train_prompt_bsz=8
-val_prompt_bsz=64
+train_prompt_bsz=16
+val_prompt_bsz=128
 rollout_n=8
 max_prompt_length=$((512 * 3))
 max_response_length=$((512 * 2))
@@ -58,10 +58,11 @@ num_nodes=1
 micro_bs_per_gpu=$((64 / (num_nodes * 8)))
 num_cpus_per_env_worker=0.25
 save_freq=-1
-test_freq=16
+test_freq=4
 total_epochs=1
+checkpoint_dir=${PROJ_DIR}/saved_models
 # Each train step is a single 64-sample batches per environment (so two steps for twx and two steps for alfworld)
-train_steps=2
+train_steps=8
 
 rollout_save_dir=${DATA_OUT_DIR}
 mkdir -p "${rollout_save_dir}"
@@ -110,10 +111,11 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.optim.lr=3e-6 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${micro_bs_per_gpu} \
     actor_rollout_ref.actor.use_kl_loss=False \
+    +actor_rollout_ref.actor.use_entropy_advantage=False \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.clip_ratio_low=0.2 \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
-    actor_rollout_ref.actor.entropy_coeff=0 \
+    actor_rollout_ref.actor.entropy_coeff=0.0 \
     actor_rollout_ref.actor.loss_agg_mode='seq-mean-token-sum-norm' \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${micro_bs_per_gpu} \
     actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=${max_total_length} \
@@ -147,7 +149,7 @@ uv run -m verl.trainer.main_ppo \
     +intermediary.enabled=False \
     \
     +trainer.run_type=${run_type} \
-    +trainer.rollout_data_dir=${rollout_save_dir} \
+    trainer.default_local_dir=${checkpoint_dir} \
     trainer.total_training_steps=${train_steps} \
     trainer.logger=['wandb'] \
     trainer.log_val_generations=0 \

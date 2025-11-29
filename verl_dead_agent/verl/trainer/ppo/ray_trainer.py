@@ -661,8 +661,9 @@ class RayPPOTrainer:
         if env_names.size == 0:
             return
 
-        rewards = batch.batch.get("episode_rewards")
-        lengths = batch.batch.get("episode_lengths")
+        # TensorDict.get() raises KeyError if key not found, so check keys first
+        rewards = batch.batch["episode_rewards"] if "episode_rewards" in batch.batch.keys() else None
+        lengths = batch.batch["episode_lengths"] if "episode_lengths" in batch.batch.keys() else None
         unique_envs = np.unique(env_names)
 
         for raw_name in unique_envs:
@@ -1527,7 +1528,13 @@ class RayPPOTrainer:
                                 last_val_metrics = val_metrics
                         metrics.update(val_metrics)
 
-                    if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
+                    # Checkpoint saving logic:
+                    # save_freq > 0: save every save_freq steps and on last step
+                    # save_freq == -1: save only on last step
+                    # save_freq == 0: never save
+                    save_freq = self.config.trainer.save_freq
+                    should_save = (save_freq > 0 and (is_last_step or self.global_steps % save_freq == 0)) or (save_freq == -1 and is_last_step)
+                    if should_save:
                         with _timer("save_checkpoint", timing_raw):
                             self._save_checkpoint()
 
@@ -1568,7 +1575,7 @@ class RayPPOTrainer:
                     legal_np = np.asarray(legal_moves, dtype=float)
                     metrics["training/percent_legal_moves"] = float(legal_np.mean())
 
-                episode_rewards = batch.batch.get("episode_rewards")
+                episode_rewards = batch.batch.get("returns")
                 if episode_rewards is not None:
                     success_ratio = (episode_rewards > 0).float().mean().item()
                     metrics["training/percent_successful"] = float(success_ratio)
