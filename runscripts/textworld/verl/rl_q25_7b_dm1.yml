@@ -1,0 +1,49 @@
+name: sdp-q25-7b-dm1-rl
+image: mosaicml/pytorch
+compute:
+    gpus: 8
+    cluster: r8z13p1
+scheduling:
+  priority: lowest
+  resumable: false
+  preemptible: true
+integrations:
+  - integration_type: wandb
+    project: llm-chess-rl
+    entity: lucasdino-ucsd
+env_variables:
+  SH_FILE: "rl_q25_7b_dm1.sh"
+  EXPERIMENT_NAME: "q25-7b-dm1-rl-v1"
+command: |-
+  # Need to install java for twx
+  apt update
+  apt install -y default-jdk
+
+  # Get env set up on cluster (in /home/...)
+  cd home
+  git clone --recurse-submodules https://github.com/lucasdino/sequential-decision-processors.git
+  cd sequential-decision-processors
+  mv runscripts verl_dead_agent/
+  cd verl_dead_agent
+
+  pip install uv
+  uv venv .venv
+  source .venv/bin/activate
+  uv add wheel packaging
+  uv add flash-attn==2.7.4.post1 --no-build-isolation
+
+  # Download our alfworld data
+  alfworld-download -f
+
+  cd ..
+  # hf download Qwen/Qwen3-32B --local-dir models/Qwen3-32B
+  cd verl_dead_agent
+
+  # Run our rejsampling script
+  chmod +x runscripts/*.sh
+  runscripts/textworld/rejsampling/$SH_FILE
+
+  # Save down rejsample data
+  pip install --no-cache-dir awscli
+  aws s3 cp /home/sequential-decision-processors/model_outputs s3://seq-dec-proc/saved_data/$EXPERIMENT_NAME --recursive
+  # Also need to save down the model
