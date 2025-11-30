@@ -35,7 +35,7 @@ DATA_OUT_DIR=${PROJ_DIR}/model_outputs
 # ##############################
 # Main training args
 # ##############################
-env_seed=42
+env_seed=100
 env_name=tales_twx_alfworld
 twx_max_steps=35
 alfworld_max_steps=30
