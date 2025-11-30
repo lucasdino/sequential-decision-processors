@@ -46,4 +46,5 @@ command: |-
 
   # save down the model
   aws s3 cp /home/sequential-decision-processors/saved_models s3://seq-dec-proc/rl_models/$EXPERIMENT_NAME --recursive \
-  --exclude "*/optim/*"
+  --exclude "*/optim_*" \
+  --exclude "optim_*"
