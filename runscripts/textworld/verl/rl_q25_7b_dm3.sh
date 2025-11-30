@@ -52,7 +52,7 @@ train_prompt_bsz=16
 val_prompt_bsz=128
 rollout_n=8
 max_prompt_length=$((512 * 3))
-max_response_length=$((512 * 2))
+max_response_length=$((512 * 4))
 max_total_length=$((max_prompt_length + max_response_length))
 num_nodes=1
 micro_bs_per_gpu=$((64 / (num_nodes * 8)))
@@ -108,7 +108,7 @@ uv run -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.use_torch_compile=False \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=${max_total_length} \
     actor_rollout_ref.actor.strategy="fsdp" \
-    actor_rollout_ref.actor.optim.lr=3e-6 \
+    actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${micro_bs_per_gpu} \
     actor_rollout_ref.actor.use_kl_loss=False \
     +actor_rollout_ref.actor.use_entropy_advantage=False \
